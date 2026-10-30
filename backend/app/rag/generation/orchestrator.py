@@ -2,6 +2,7 @@ import logging
 import re
 import time
 
+from app.rag.generation.citations import select_quote
 from app.rag.generation.llm import ChatModel
 from app.rag.generation.prompts import NOT_FOUND_MESSAGE, NOT_FOUND_TOKEN, build_messages
 from app.rag.ingestion.embedder import Embedder
@@ -37,7 +38,7 @@ def _check_citations(text: str, available: int) -> tuple[str, list[int]]:
     return cleaned.strip(), used
 
 
-def _source(number: int, hit: SearchHit) -> Source:
+def _source(number: int, hit: SearchHit, answer: str) -> Source:
     meta = hit.metadata
     start, end = meta.get("page_start"), meta.get("page_end")
     return Source(
@@ -49,6 +50,7 @@ def _source(number: int, hit: SearchHit) -> Source:
         section_title=str(meta.get("section_title", "")),
         page_start=start if isinstance(start, int) else None,
         page_end=end if isinstance(end, int) else None,
+        quote=select_quote(answer, number, hit.text),
     )
 
 
@@ -103,5 +105,5 @@ def _generate(question: str, relevant: list[SearchHit], chat_model: ChatModel) -
     return ChatAnswer(
         status="answered",
         answer=text,
-        sources=[_source(number, relevant[number - 1]) for number in used],
+        sources=[_source(number, relevant[number - 1], text) for number in used],
     )

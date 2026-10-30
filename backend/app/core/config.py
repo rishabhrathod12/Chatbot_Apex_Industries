@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     chat_temperature: float | None = 0.0  # None = leave to the model (some models require it)
     chat_max_tokens: int = 600
     retrieval_top_k: int = 5
+    chat_history_turns: int = 3  # earlier question/answer pairs used to resolve follow-ups
     # Chunks scoring below this are never shown to the model. Calibrated for text-embedding-3-small
     # with the real embedder. 0.40 sits below every answerable golden question (lowest 0.458)
     # and above only the clearest misses. See docs/retrieval-baseline.md before changing it.
@@ -62,6 +63,8 @@ class Settings(BaseSettings):
     def _check_generation_settings(self) -> "Settings":
         if not 0.0 <= self.retrieval_min_score <= 1.0:
             raise ValueError("RETRIEVAL_MIN_SCORE must be between 0 and 1")
+        if not 0 <= self.chat_history_turns <= 10:
+            raise ValueError("CHAT_HISTORY_TURNS must be between 0 and 10")
         if not 1 <= self.retrieval_top_k <= 20:
             raise ValueError("RETRIEVAL_TOP_K must be between 1 and 20")
         if self.chat_temperature is not None and not 0.0 <= self.chat_temperature <= 2.0:

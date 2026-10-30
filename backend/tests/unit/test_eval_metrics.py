@@ -5,12 +5,20 @@ from pathlib import Path
 import pytest
 
 from app.rag.ingestion.extractors import extract
-from eval.evaluate import AnswerResult, evaluate_answers, evaluate_retrieval, summarize_answers
+from eval.evaluate import (
+    AnswerResult,
+    FollowupResult,
+    evaluate_answers,
+    evaluate_followups,
+    evaluate_retrieval,
+    summarize_answers,
+)
 from eval.metrics import (
     Case,
     Expected,
     RetrievedChunk,
     first_hit_rank,
+    load_followups,
     load_golden,
     score_spread,
     summarize,
@@ -217,3 +225,44 @@ def test_evaluate_answers_skips_the_model_when_nothing_is_relevant(
     assert {r.status for r in results} == {"not_found"}
     assert {r.reason for r in results} == {"no_relevant_context"}
     assert chat.calls == []
+
+
+# ---------- follow-ups ----------
+
+
+def test_followup_cases_are_well_formed() -> None:
+    followups = load_followups()
+    assert [f.id for f in followups] == ["F01", "F02", "F03"]
+    for f in followups:
+        assert f.first_question.strip() and f.question.strip()
+        assert f.expected
+    real_codes = {extract(p, ".pdf").metadata.doc_code for p in SAMPLE_DOCS.glob("*.pdf")}
+    assert {e.doc_code for f in followups for e in f.expected} <= real_codes
+
+
+def test_followup_is_resolved_only_when_answered_from_the_right_document() -> None:
+    def result(status: str, sources: tuple[str, ...]) -> FollowupResult:
+        return FollowupResult("F", "q", None, status, sources, ("X",))
+
+    assert result("answered", ("X", "Y")).resolved
+    assert not result("answered", ("Y",)).resolved
+    assert not result("not_found", ()).resolved
+
+
+def test_evaluate_followups_rewrites_before_answering(indexed_samples: IndexedSamples) -> None:
+    followups = load_followups()[:1]
+    # Call order: answer to the first question, rewrite, answer to the rewritten question.
+    chat = ScriptedChat(
+        [
+            "Check the guards [1].",
+            "What must I check before shutting down a CNC machine?",
+            "Done [1].",
+        ]
+    )
+    results = evaluate_followups(
+        followups, indexed_samples.embedder, indexed_samples.store, chat, min_score=0.0
+    )
+    assert len(chat.calls) == 3
+    assert results[0].rewritten == "What must I check before shutting down a CNC machine?"
+    assert "Latest message: And what about shutdown?" in chat.calls[1][1]["content"]
+    assert "Question: What must I check before shutting down" in chat.calls[2][1]["content"]

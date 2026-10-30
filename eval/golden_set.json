@@ -1,5 +1,5 @@
 {
-  "note": "Derived from docs/golden-questions-draft.md. Expected pages are PDF page numbers. Types: answerable / multi_document / exact_id have expected sources. unanswerable (nothing in the documents): the right outcome is a refusal. not_specified (the documents explicitly say they do not give the value): a refusal or a grounded statement that it is not specified is acceptable, answers are flagged for manual review. Permission, follow-up and injection cases arrive with M8 and M11.",
+  "note": "Derived from docs/golden-questions-draft.md. Expected pages are PDF page numbers. Types: answerable / multi_document / exact_id have expected sources. unanswerable (nothing in the documents): the right outcome is a refusal. not_specified (the documents explicitly say they do not give the value): a refusal or a grounded statement that it is not specified is acceptable, answers are flagged for manual review. Follow-ups (two-turn conversations) are listed separately. Permission and injection cases arrive with M11.",
   "cases": [
     {
       "id": "A01",
@@ -264,6 +264,41 @@
       "type": "unanswerable",
       "question": "What is the goods receipt procedure of the Stores department?",
       "expected": []
+    }
+  ],
+  "followups": [
+    {
+      "id": "F01",
+      "first_question": "What must I check before operating a CNC machine?",
+      "question": "And what about shutdown?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "F02",
+      "first_question": "How do I report a machine fault?",
+      "question": "Who do I notify?",
+      "expected": [
+        {
+          "doc_code": "APM-MNT-MAN-002",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "F03",
+      "first_question": "What are the steps of lockout/tagout?",
+      "question": "Who is allowed to do that work?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
     }
   ]
 }

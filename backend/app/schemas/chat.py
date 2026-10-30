@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -14,6 +15,8 @@ class Source(BaseModel):
     section_title: str
     page_start: int | None = None
     page_end: int | None = None
+    # A sentence copied word for word from the cited chunk, so it can be checked against the page.
+    quote: str = ""
 
 
 class ChatAnswer(BaseModel):
@@ -22,3 +25,29 @@ class ChatAnswer(BaseModel):
     sources: list[Source]
     # Why nothing was answered: no_relevant_context, model_declined, uncited_answer, empty_answer.
     reason: str | None = None
+    conversation_id: str | None = None
+    message_id: str | None = None
+    # The standalone question used for retrieval, when a follow-up was rewritten.
+    rewritten_question: str | None = None
+
+
+class ConversationOut(BaseModel):
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class MessageOut(BaseModel):
+    id: str
+    role: Literal["user", "assistant"]
+    content: str
+    status: str | None = None
+    reason: str | None = None
+    sources: list[Source] = []
+    rewritten_question: str | None = None
+    created_at: datetime
+
+
+class ConversationDetail(ConversationOut):
+    messages: list[MessageOut]

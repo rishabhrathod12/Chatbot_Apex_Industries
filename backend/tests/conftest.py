@@ -13,7 +13,7 @@ from app.core.config import Settings, get_settings
 from app.core.database import Base, get_engine, get_session_factory
 from app.main import create_app
 from app.models import Document
-from app.rag.generation.llm import ChatMessage
+from app.rag.generation.llm import ChatMessage, LlmError
 from app.rag.ingestion.embedder import HashingEmbedder
 from app.rag.vectorstore import QdrantVectorStore, close_client
 from app.repositories import documents as repo
@@ -67,12 +67,17 @@ class ScriptedChat:
 
     replies: list[str] | str = "ok"
     error: Exception | None = None
+    fail_on_calls: set[int] = field(default_factory=set)  # 0-based call numbers that fail
     calls: list[list[ChatMessage]] = field(default_factory=list)
 
     def complete(self, messages: Sequence[ChatMessage]) -> str:
         self.calls.append(list(messages))
         if self.error is not None:
             raise self.error
+        if len(self.calls) - 1 in self.fail_on_calls:
+            if isinstance(self.replies, list):
+                self.replies.pop(0)
+            raise LlmError("llm_request_failed")
         if isinstance(self.replies, str):
             return self.replies
         return self.replies.pop(0)

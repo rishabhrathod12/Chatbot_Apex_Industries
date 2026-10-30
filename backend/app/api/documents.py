@@ -12,11 +12,10 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_embedder_provider, get_store_provider
+from app.api.deps import get_current_user_id, get_embedder_provider, get_store_provider
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.core.departments import canonical_department
-from app.core.dev_user import DEV_USER_ID
 from app.rag.ingestion.embedder import embedding_dimensions
 from app.rag.ingestion.pipeline import EmbedderProvider, Scope, StoreProvider, run_ingestion
 from app.repositories import documents as repo
@@ -38,6 +37,7 @@ def upload_documents(
     settings: Settings = Depends(get_settings),
     embedder_provider: EmbedderProvider = Depends(get_embedder_provider),
     store_provider: StoreProvider = Depends(get_store_provider),
+    user_id: str = Depends(get_current_user_id),
 ) -> UploadResponse:
     if not files:
         raise HTTPException(status_code=422, detail="no_files")
@@ -53,7 +53,7 @@ def upload_documents(
 
     results = [
         service.store_upload(
-            db, f, scope=scope, owner_id=DEV_USER_ID, department=dept, settings=settings
+            db, f, scope=scope, owner_id=user_id, department=dept, settings=settings
         )
         for f in files
     ]

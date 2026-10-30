@@ -10,10 +10,9 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import get_embedder_provider, get_store_provider
+from app.api.deps import get_current_user_id, get_embedder_provider, get_store_provider
 from app.core.config import Settings, get_settings
 from app.core.departments import canonical_department
-from app.core.dev_user import DEV_USER_ID
 from app.rag.ingestion.embedder import EmbeddingError, embedding_dimensions
 from app.rag.ingestion.pipeline import EmbedderProvider, StoreProvider
 from app.rag.retrieval import semantic_search
@@ -53,9 +52,10 @@ def search(
     settings: Settings = Depends(get_settings),
     embedder_provider: EmbedderProvider = Depends(get_embedder_provider),
     store_provider: StoreProvider = Depends(get_store_provider),
+    user_id: str = Depends(get_current_user_id),
 ) -> list[SearchHitOut]:
     if body.scope == "personal":
-        search_filter = SearchFilter(owner_id=DEV_USER_ID)
+        search_filter = SearchFilter(owner_id=user_id)
     elif body.department is not None:
         dept = canonical_department(body.department)
         if dept is None:

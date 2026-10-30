@@ -35,8 +35,9 @@ fix the setting and call `POST /api/v1/documents/{id}/reindex`.
 
 ## Asking questions and measuring retrieval
 
-`POST /api/v1/chat` with `{"question": "..."}` returns an answer, its sources (document, section, page)
-or a "not found" result. It needs `OPENAI_API_KEY` (embeddings and chat). Retrieval quality on the
+`POST /api/v1/chat` with `{"question": "..."}` returns an answer, its sources (document, section, page,
+and a verbatim quote) or a "not found" result, plus a `conversation_id`. Send that id back to ask a
+follow-up. `GET /api/v1/conversations` lists your conversations. It needs `OPENAI_API_KEY` (embeddings and chat). Retrieval quality on the
 sample documents: `python -m eval.run --provider openai` (see `docs/retrieval-baseline.md`).
 
 ## Quality checks

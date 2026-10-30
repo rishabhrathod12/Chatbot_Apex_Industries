@@ -39,6 +39,16 @@ class Case:
 
 
 @dataclass(frozen=True)
+class Followup:
+    """A two-turn conversation: the second question only makes sense after the first."""
+
+    id: str
+    first_question: str
+    question: str
+    expected: tuple[Expected, ...]
+
+
+@dataclass(frozen=True)
 class RetrievedChunk:
     """What the metrics need to know about one retrieved chunk."""
 
@@ -58,6 +68,19 @@ def load_golden(path: Path = GOLDEN_SET) -> list[Case]:
             expected=tuple(Expected(e["doc_code"], e.get("page")) for e in c["expected"]),
         )
         for c in raw["cases"]
+    ]
+
+
+def load_followups(path: Path = GOLDEN_SET) -> list[Followup]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return [
+        Followup(
+            id=f["id"],
+            first_question=f["first_question"],
+            question=f["question"],
+            expected=tuple(Expected(e["doc_code"], e.get("page")) for e in f["expected"]),
+        )
+        for f in raw.get("followups", [])
     ]
 
 

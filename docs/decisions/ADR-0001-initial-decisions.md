@@ -72,3 +72,13 @@ Measured outcome (2026-10-31, see `docs/retrieval-baseline.md`):
 - 20/20 answerable questions answered with the right source, 0 false refusals.
 - Weakness: on a near-miss question (D06) the model sometimes answers a neighbouring question with a true, correctly cited sentence (2 of 9 runs). The citation check cannot catch this. A stricter prompt rule made it worse (5 of 5) and was reverted. Mitigation is measurement (RAGAS answer relevancy, M13) and a larger near-miss set, not more prompt tuning.
 - Golden-set types: `unanswerable` (refusal required), `not_specified` (refusal OR grounded "not specified" accepted, answers flagged for manual review).
+
+## ADR-0008: Conversation memory and source quotes (M8, 2026-10-31)
+
+1. **Follow-ups are rewritten, not replayed.** One small model call turns the new message into a standalone question using the last 3 turns (`CHAT_HISTORY_TURNS`). Retrieval and the answering prompt then see only that question, never the history. This keeps earlier text from steering the answer and keeps the answering prompt identical to the one measured at M7. If the rewrite fails or looks wrong, the original message is used.
+2. **Quotes are selected by code, not by the model.** The `quote` on each source is the chunk line that shares the most words with the part of the answer that cites it. It is always copied from the chunk, so it can be checked. A test checks that every quote for every golden question appears in the text of the cited page.
+3. **Ownership.** A conversation belongs to one user. Anyone else gets 404, identical to the response for a conversation that does not exist. `get_current_user_id` is the single place the user comes from; M11 replaces it with JWT.
+4. **Nothing is saved if answering fails**, so a model outage never leaves a half-written conversation.
+5. **Retention:** conversations are kept until the user deletes them. Revisit at M14.
+
+Limitations: a saved answer is a snapshot and stays visible to its owner even if their access or the source document changes later. The rewrite step costs one extra model call per follow-up.

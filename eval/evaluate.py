@@ -2,11 +2,11 @@
 
 from dataclasses import dataclass, field
 
-from app.rag.generation import ChatModel, answer_question
+from app.rag.generation import ChatModel, HistoryTurn, answer_question, condense_question
 from app.rag.ingestion.embedder import Embedder
 from app.rag.retrieval import semantic_search
 from app.rag.vectorstore import VectorStore
-from eval.metrics import Case, RetrievedChunk, first_hit_rank, score_spread, summarize
+from eval.metrics import Case, Followup, RetrievedChunk, first_hit_rank, score_spread, summarize
 
 
 @dataclass
@@ -144,3 +144,64 @@ def summarize_answers(results: list[AnswerResult]) -> dict[str, object]:
             {r.reason or "" for r in unanswerable if r.status == "not_found"}
         ),
     }
+
+
+# ---------- follow-up questions ----------
+
+
+@dataclass(frozen=True)
+class FollowupResult:
+    case_id: str
+    question: str
+    rewritten: str | None
+    status: str
+    source_codes: tuple[str, ...]
+    expected_codes: tuple[str, ...]
+
+    @property
+    def resolved(self) -> bool:
+        """The follow-up was answered from the document it was really about."""
+        return self.status == "answered" and bool(set(self.source_codes) & set(self.expected_codes))
+
+
+def evaluate_followups(
+    followups: list[Followup],
+    embedder: Embedder,
+    store: VectorStore,
+    chat_model: ChatModel,
+    *,
+    top_k: int = 5,
+    min_score: float = 0.40,
+) -> list[FollowupResult]:
+    """Ask the first question, then the follow-up the way the app does (rewrite, then answer)."""
+    results: list[FollowupResult] = []
+    for item in followups:
+        first = answer_question(
+            item.first_question,
+            embedder=embedder,
+            store=store,
+            chat_model=chat_model,
+            top_k=top_k,
+            min_score=min_score,
+        )
+        history = [HistoryTurn("user", item.first_question), HistoryTurn("assistant", first.answer)]
+        rewritten = condense_question(history, item.question, chat_model)
+        reply = answer_question(
+            rewritten or item.question,
+            embedder=embedder,
+            store=store,
+            chat_model=chat_model,
+            top_k=top_k,
+            min_score=min_score,
+        )
+        results.append(
+            FollowupResult(
+                case_id=item.id,
+                question=item.question,
+                rewritten=rewritten,
+                status=reply.status,
+                source_codes=tuple(dict.fromkeys(s.doc_code for s in reply.sources)),
+                expected_codes=tuple(dict.fromkeys(e.doc_code for e in item.expected)),
+            )
+        )
+    return results

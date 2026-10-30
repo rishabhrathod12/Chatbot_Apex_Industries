@@ -3,6 +3,7 @@ from collections.abc import Callable
 from fastapi import Depends
 
 from app.core.config import Settings, get_settings
+from app.core.dev_user import DEV_USER_ID
 from app.rag.generation import ChatModel, get_chat_model
 from app.rag.ingestion.embedder import Embedder, get_embedder
 from app.rag.ingestion.pipeline import EmbedderProvider, Scope, StoreProvider
@@ -36,3 +37,11 @@ def get_chat_model_provider(settings: Settings = Depends(get_settings)) -> ChatM
         return get_chat_model(settings)
 
     return provider
+
+
+def get_current_user_id() -> str:
+    """Who is making the request. TEMPORARY: always the dev user until M11 adds login (JWT).
+
+    Every endpoint that needs an owner depends on this, so M11 changes only this function.
+    """
+    return DEV_USER_ID

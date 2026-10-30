@@ -73,3 +73,11 @@ Two embedded Qdrant collections: `enterprise_chunks` and `personal_chunks`. Cosi
 - `SearchFilter(departments, owner_id, document_ids)`: `None` = unrestricted, an empty list = **no results** (fails closed).
 - Payload indexes are not created. Embedded mode ignores them. Create them if this moves to a Qdrant server.
 - Document rows now also hold `status_reason`, `chunk_count`, `page_count`, `doc_code`, `title`, `doc_version` (migration 0002).
+
+## 7. Conversations (M8)
+
+- `conversations` (id, user_id, title, created_at, updated_at). Index on (user_id, updated_at).
+- `messages` (id, conversation_id, position, role, content, status, reason, sources_json, rewritten_question, created_at). Index on (conversation_id, position). Deleting a conversation deletes its messages.
+- `sources_json` is a snapshot of the sources shown with the answer, including the verbatim `quote`. If the source document is later changed or deleted, the saved answer keeps showing what it showed at the time.
+- The user's own wording is stored as typed. The rewritten standalone question (follow-ups only) is stored on the assistant message.
+- A conversation is capped at 200 messages.

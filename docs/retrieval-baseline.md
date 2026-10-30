@@ -52,3 +52,15 @@ What would address it: RAGAS **answer relevancy** and **faithfulness** (M13) to 
 
 - The model is not fully deterministic even at temperature 0, so single runs can differ. Repeat runs when judging a change (as in section 3).
 - A full `run_answers` run is about 22 chat calls plus embeddings, a small fraction of a cent.
+
+## 5. Follow-up questions (M8, real models, 2026-10-31)
+
+A follow-up is rewritten as a standalone question (one extra model call, using the last 3 turns), then retrieved and answered like any other question. Command: `python -m eval.run_answers`.
+
+| Case | Follow-up | Rewritten as | Answered from |
+|---|---|---|---|
+| F01 | And what about shutdown? | What must I check before shutting down a CNC machine? | APM-PROD-MAN-001 (correct) |
+| F02 | Who do I notify? | Who should I notify when reporting a machine fault? | APM-MNT-MAN-002 (correct) |
+| F03 | Who is allowed to do that work? | Who is authorized to perform lockout/tagout procedures? | APM-HSE-MAN-003 (correct), plus APM-MNT-MAN-002 |
+
+**3 of 3 resolved.** Only 3 cases, so this shows the mechanism works, not how often it works. Things not yet measured: follow-ups that change topic, follow-ups that depend on the previous *answer* rather than the previous question, and very short or ambiguous messages.

@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from app.api import chat, documents, health, search
+from app.api import chat, conversations, documents, health, search
 from app.core.config import get_settings
 from app.core.logging import configure_logging, request_id_ctx
 
@@ -54,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(documents.router, prefix="/api/v1")
     app.include_router(search.router, prefix="/api/v1")
     app.include_router(chat.router, prefix="/api/v1")
+    app.include_router(conversations.router, prefix="/api/v1")
     return app
 
 

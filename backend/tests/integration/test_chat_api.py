@@ -63,12 +63,13 @@ def test_nothing_indexed_means_not_found_without_calling_the_model(chat_client: 
     model = ScriptedChat("unused")
     _use_model(chat_client, model)
     body = _ask(chat_client).json()
-    assert body == {
-        "status": "not_found",
-        "answer": NOT_FOUND_MESSAGE,
-        "sources": [],
-        "reason": "no_relevant_context",
-    }
+    assert (body["status"], body["answer"], body["sources"], body["reason"]) == (
+        "not_found",
+        NOT_FOUND_MESSAGE,
+        [],
+        "no_relevant_context",
+    )
+    assert body["rewritten_question"] is None
     assert model.calls == []
 
 
