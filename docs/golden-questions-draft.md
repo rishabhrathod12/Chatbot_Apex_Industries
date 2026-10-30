@@ -1,5 +1,7 @@
 # Golden Questions (draft, for M7 onward)
 
+Sections A-D are now also in machine-readable form in `eval/golden_set.json` (used by `python -m eval.run`). Keep the two in step. E-G (permissions, follow-ups, injection) arrive with M8 and M11.
+
 Written from the six sample PDFs. Page numbers are the PDF page index. Expected sources are ground truth for retrieval metrics (hit rate, MRR) and citation checks.
 
 ## A. Answerable, single document

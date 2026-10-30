@@ -1,7 +1,8 @@
 import io
 import shutil
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -12,15 +13,18 @@ from app.core.config import Settings, get_settings
 from app.core.database import Base, get_engine, get_session_factory
 from app.main import create_app
 from app.models import Document
-from app.rag.vectorstore import close_all
+from app.rag.generation.llm import ChatMessage
+from app.rag.ingestion.embedder import HashingEmbedder
+from app.rag.vectorstore import QdrantVectorStore, close_client
 from app.repositories import documents as repo
+from eval.indexing import index_sample_documents
 
 SAMPLE_DOCS = Path(__file__).resolve().parents[2] / "data" / "sample_docs"
 
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Iterator[Settings]:
-    yield Settings(
+    value = Settings(
         _env_file=None,  # type: ignore[call-arg]
         app_env="test",
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
@@ -30,7 +34,48 @@ def settings(tmp_path: Path) -> Iterator[Settings]:
         max_upload_mb=1,
         max_files_per_request=3,
     )
-    close_all()  # embedded Qdrant holds a lock on its folder until closed
+    yield value
+    close_client(value.vector_store_path)  # embedded Qdrant locks its folder until closed
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_api_key(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the normal suite offline even if a real key is set in the shell."""
+    if "live" not in request.keywords:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+
+@dataclass
+class IndexedSamples:
+    store: QdrantVectorStore
+    embedder: HashingEmbedder
+
+
+@pytest.fixture(scope="session")
+def indexed_samples(tmp_path_factory: pytest.TempPathFactory) -> Iterator[IndexedSamples]:
+    """The six sample PDFs, indexed once for the whole test session (read-only for tests)."""
+    path = str(tmp_path_factory.mktemp("sample_index"))
+    embedder = HashingEmbedder()
+    store = index_sample_documents(path, embedder, SAMPLE_DOCS)
+    yield IndexedSamples(store, embedder)
+    close_client(path)
+
+
+@dataclass
+class ScriptedChat:
+    """A stand-in language model that returns canned replies and records what it was sent."""
+
+    replies: list[str] | str = "ok"
+    error: Exception | None = None
+    calls: list[list[ChatMessage]] = field(default_factory=list)
+
+    def complete(self, messages: Sequence[ChatMessage]) -> str:
+        self.calls.append(list(messages))
+        if self.error is not None:
+            raise self.error
+        if isinstance(self.replies, str):
+            return self.replies
+        return self.replies.pop(0)
 
 
 @pytest.fixture

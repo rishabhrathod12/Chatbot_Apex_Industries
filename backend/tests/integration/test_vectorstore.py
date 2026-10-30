@@ -7,7 +7,7 @@ from app.rag.vectorstore import (
     QdrantVectorStore,
     SearchFilter,
     VectorStoreError,
-    close_all,
+    close_client,
     collection_name,
 )
 from app.schemas.chunk import Chunk, DocumentContext
@@ -150,7 +150,7 @@ def test_delete_stale_keeps_listed_chunks(settings: Settings) -> None:
 
 def test_data_survives_closing_and_reopening(settings: Settings) -> None:
     _add(_store(settings), _chunks("d1", "hr", ["- persisted"]))
-    close_all()
+    close_client(settings.vector_store_path)
     assert _store(settings).count() == 1
 
 

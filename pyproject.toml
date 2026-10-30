@@ -31,14 +31,14 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
-pythonpath = ["backend"]
+pythonpath = ["backend", "."]
 addopts = "-m 'not live'"
 markers = ["live: calls real external APIs (needs keys); run with -m live"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["backend"]
+src = ["backend", "."]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
@@ -47,7 +47,7 @@ select = ["E", "F", "I", "B", "UP"]
 python_version = "3.12"
 strict = true
 mypy_path = "backend"
-packages = ["app"]
+packages = ["app", "eval"]
 explicit_package_bases = true
 
 [tool.ruff.lint.per-file-ignores]

@@ -32,6 +32,12 @@ without a key, set `EMBEDDING_PROVIDER=hashing` (development only, no real seman
 Without either, uploads succeed but the document is marked `failed: embedding_not_configured`;
 fix the setting and call `POST /api/v1/documents/{id}/reindex`.
 
+## Asking questions and measuring retrieval
+
+`POST /api/v1/chat` with `{"question": "..."}` returns an answer, its sources (document, section, page)
+or a "not found" result. It needs `OPENAI_API_KEY` (embeddings and chat). Retrieval quality on the
+sample documents: `python -m eval.run --provider openai` (see `docs/retrieval-baseline.md`).
+
 ## Quality checks
 
 ```powershell

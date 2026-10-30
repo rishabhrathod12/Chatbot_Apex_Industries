@@ -1,0 +1,269 @@
+{
+  "note": "Derived from docs/golden-questions-draft.md. Expected pages are PDF page numbers. Unanswerable questions have no expected source: the right outcome is a refusal. Permission, follow-up and injection cases arrive with M8 and M11.",
+  "cases": [
+    {
+      "id": "A01",
+      "type": "answerable",
+      "question": "What must be checked before operating a CNC machine?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A02",
+      "type": "answerable",
+      "question": "Who may operate CNC equipment?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A03",
+      "type": "answerable",
+      "question": "What should an operator do if an alarm is abnormal or a guard seems faulty?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A04",
+      "type": "answerable",
+      "question": "What information should I give when reporting a machine fault?",
+      "expected": [
+        {
+          "doc_code": "APM-MNT-MAN-002",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A05",
+      "type": "answerable",
+      "question": "What should I do if a machine shows an over-temperature indication?",
+      "expected": [
+        {
+          "doc_code": "APM-MNT-MAN-002",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A06",
+      "type": "answerable",
+      "question": "Can I keep resetting an alarm to keep production moving?",
+      "expected": [
+        {
+          "doc_code": "APM-MNT-MAN-002",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A07",
+      "type": "answerable",
+      "question": "What are the steps of lockout/tagout?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A08",
+      "type": "answerable",
+      "question": "Can an emergency stop be used as the energy-isolation method?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A09",
+      "type": "answerable",
+      "question": "What should I do before handling a chemical?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A10",
+      "type": "answerable",
+      "question": "When can I re-enter an evacuated area?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A11",
+      "type": "answerable",
+      "question": "What must happen before batch production continues after the first piece?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A12",
+      "type": "answerable",
+      "question": "What should I record during in-process checks?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A13",
+      "type": "answerable",
+      "question": "How do I submit a leave request?",
+      "expected": [
+        {
+          "doc_code": "APM-HR-POL-005",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A14",
+      "type": "answerable",
+      "question": "What should I do about a missed attendance punch?",
+      "expected": [
+        {
+          "doc_code": "APM-HR-POL-005",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A15",
+      "type": "answerable",
+      "question": "Who can release a product after final inspection?",
+      "expected": [
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "A16",
+      "type": "answerable",
+      "question": "What goes into a nonconformance report?",
+      "expected": [
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "B01",
+      "type": "multi_document",
+      "question": "What happens when a measurement is outside specification?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        },
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "B02",
+      "type": "multi_document",
+      "question": "What are the rules for dealing with nonconforming material or parts?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        },
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "C01",
+      "type": "exact_id",
+      "question": "What is document APM-QLT-SOP-006 about?",
+      "expected": [
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 1
+        }
+      ]
+    },
+    {
+      "id": "C02",
+      "type": "exact_id",
+      "question": "Show me APM-HSE-MAN-003",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 1
+        }
+      ]
+    },
+    {
+      "id": "D01",
+      "type": "unanswerable",
+      "question": "How many days of annual leave do I get?",
+      "expected": []
+    },
+    {
+      "id": "D02",
+      "type": "unanswerable",
+      "question": "What is the maximum spindle temperature for the CNC machine?",
+      "expected": []
+    },
+    {
+      "id": "D03",
+      "type": "unanswerable",
+      "question": "What tolerance applies to part X-100?",
+      "expected": []
+    },
+    {
+      "id": "D04",
+      "type": "unanswerable",
+      "question": "What is the maintenance interval for the coolant pump?",
+      "expected": []
+    },
+    {
+      "id": "D05",
+      "type": "unanswerable",
+      "question": "Who is the CEO of Apex?",
+      "expected": []
+    },
+    {
+      "id": "D06",
+      "type": "unanswerable",
+      "question": "What is the goods receipt procedure of the Stores department?",
+      "expected": []
+    }
+  ]
+}

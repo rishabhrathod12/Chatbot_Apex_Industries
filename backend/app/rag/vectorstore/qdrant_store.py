@@ -45,6 +45,14 @@ def open_client(path: str) -> _Handle:
         return handle
 
 
+def close_client(path: str) -> None:
+    """Close the embedded client for one storage folder (it holds a lock until closed)."""
+    with _handles_lock:
+        handle = _handles.pop(path, None)
+        if handle is not None:
+            handle.client.close()
+
+
 def close_all() -> None:
     """Close every open embedded client (used by tests and on shutdown)."""
     with _handles_lock:

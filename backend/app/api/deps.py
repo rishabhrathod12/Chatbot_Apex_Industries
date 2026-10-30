@@ -1,6 +1,9 @@
+from collections.abc import Callable
+
 from fastapi import Depends
 
 from app.core.config import Settings, get_settings
+from app.rag.generation import ChatModel, get_chat_model
 from app.rag.ingestion.embedder import Embedder, get_embedder
 from app.rag.ingestion.pipeline import EmbedderProvider, Scope, StoreProvider
 from app.rag.vectorstore import QdrantVectorStore, VectorStore, collection_name
@@ -19,5 +22,17 @@ def get_embedder_provider(settings: Settings = Depends(get_settings)) -> Embedde
 def get_store_provider(settings: Settings = Depends(get_settings)) -> StoreProvider:
     def provider(scope: Scope, dimensions: int) -> VectorStore:
         return QdrantVectorStore(settings.vector_store_path, collection_name(scope), dimensions)
+
+    return provider
+
+
+ChatModelProvider = Callable[[], ChatModel]
+
+
+def get_chat_model_provider(settings: Settings = Depends(get_settings)) -> ChatModelProvider:
+    """Callable for the same reason as the embedder: a missing key becomes a clean 503."""
+
+    def provider() -> ChatModel:
+        return get_chat_model(settings)
 
     return provider

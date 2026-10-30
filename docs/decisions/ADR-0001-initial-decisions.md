@@ -55,3 +55,16 @@ Consequences: embedded Qdrant allows one process per storage folder, so the API 
 ## ADR-0006: Offline hashing embedder (M6, 2026-10-31)
 
 `HashingEmbedder` (word hashing, no semantics) lets the full pipeline run and be tested without an API key or network. It is blocked in production by a settings check. Its retrieval results are a plumbing baseline only. On the 16 golden questions it puts the right document in the top 3 for 14. The other 2 are marked `xfail(strict)`. Real retrieval quality is measured with the OpenAI embedder at M7.
+
+## ADR-0007: How answers are grounded and checked (M7, 2026-10-31)
+
+Hallucination is reduced in layers, because no single one is reliable (see `docs/retrieval-baseline.md`):
+
+1. Only chunks the permission filter allows AND that score at least `RETRIEVAL_MIN_SCORE` reach the model. If none do, the model is not called.
+2. The prompt confines the model to numbered excerpts, tells it to cite `[n]` after each statement and to reply `NOT_FOUND` if the excerpts don't answer.
+3. Excerpts are wrapped in `<context>` tags and any such tag inside document text, labels or the question is neutralised, so text can't break out of the block. The prompt says excerpts are data, not instructions.
+4. The answer is checked in code: markers pointing at excerpts we never sent are stripped, and an answer with **no** valid citation is discarded and replaced by "not found" (`uncited_answer`). Sources are built from stored chunk metadata, never from model text.
+
+Trade-off: strict rule 4 will occasionally discard a correct but uncited answer. For a company-policy assistant a false refusal is preferable to an unverifiable answer. Revisit with measured data.
+
+Settings that are placeholders until measured with real models: `CHAT_MODEL` (default `gpt-4.1-mini`, not confirmed for the account), `RETRIEVAL_MIN_SCORE` (0.25), `CHAT_TEMPERATURE` (0, set to none if a model rejects it).
