@@ -35,3 +35,7 @@ Status: **Approved D1-D9 and ADR-0002 reordering** (user replied "yes", 2026-10-
 9. Seeded demo users per role/department, or admin-created only?
 10. Documents English-only?
 11. Local-only demo or hosted demo?
+
+## ADR-0003: PyMuPDF pinned below 2.0 (found at M4, 2026-10-31)
+
+`pymupdf` 2.0 crashed the interpreter (segmentation fault on `import pymupdf`) on Windows with Python 3.12.10. Version 1.28.2 works. The dependency is pinned as `pymupdf>=1.24,<2`. Revisit when 2.x is confirmed stable on this platform.

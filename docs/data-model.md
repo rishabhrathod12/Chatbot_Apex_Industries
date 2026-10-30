@@ -46,3 +46,19 @@ Unique constraint: (`scope`, `owner_id` or `department_id`, `file_hash`) to prev
 ## 4. Document status
 
 `uploaded -> processing -> ready` or `failed`. Updates create a new version. The old version is removed only after the new one is `ready`.
+
+## 5. Extraction output (M4)
+
+`extract(path, ext)` returns `ExtractedDocument(pages, metadata, warnings)`.
+
+- `Page.number` is the real 1-based PDF page. It is `None` for DOCX/TXT (no stable pages).
+- Each page holds typed `Block`s, each with `kind` and `section_title`. Section state carries across page breaks, so a section spanning two pages reports the right page for each part.
+
+| Block kind | Meaning | Index it? (decided at M5) |
+|---|---|---|
+| `body` | Real content | Yes |
+| `title_block` | Cover title + metadata table (keeps the Document ID searchable) | Proposed: yes |
+| `boilerplate` | "IMPORTANT NOTICE" and "Document control" text, identical in all six samples | No |
+| `revision_history` | Version table | No |
+
+Failure reasons (`ExtractionError.reason`): `corrupt_pdf`, `encrypted_pdf`, `too_many_pages`, `page_too_large`, `no_text_layer`, `corrupt_docx`, `invalid_encoding`, `empty_document`, `unsupported_type`.

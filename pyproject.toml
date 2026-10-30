@@ -10,6 +10,8 @@ dependencies = [
     "sqlalchemy>=2.0",
     "alembic>=1.13",
     "python-multipart>=0.0.9",
+    "pymupdf>=1.24,<2",
+    "python-docx>=1.1",
 ]
 
 [project.optional-dependencies]
@@ -49,3 +51,11 @@ explicit_package_bases = true
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Form"]
+
+[[tool.mypy.overrides]]
+module = ["pymupdf", "pymupdf.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["app.rag.ingestion.extractors.pdf"]
+disallow_untyped_calls = false

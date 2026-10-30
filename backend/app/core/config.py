@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     upload_dir: str = "./storage/uploads"
     max_upload_mb: int = 20
     max_files_per_request: int = 10
+    max_pdf_pages: int = 200
 
     @model_validator(mode="after")
     def _require_secrets_in_production(self) -> "Settings":
