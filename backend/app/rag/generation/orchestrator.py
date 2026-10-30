@@ -60,7 +60,7 @@ def answer_question(
     chat_model: ChatModel,
     search_filter: SearchFilter | None = None,
     top_k: int = 5,
-    min_score: float = 0.25,
+    min_score: float = 0.40,
 ) -> ChatAnswer:
     """Retrieve, ask the model, and check the answer before returning it.
 

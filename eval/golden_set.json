@@ -1,5 +1,5 @@
 {
-  "note": "Derived from docs/golden-questions-draft.md. Expected pages are PDF page numbers. Unanswerable questions have no expected source: the right outcome is a refusal. Permission, follow-up and injection cases arrive with M8 and M11.",
+  "note": "Derived from docs/golden-questions-draft.md. Expected pages are PDF page numbers. Types: answerable / multi_document / exact_id have expected sources. unanswerable (nothing in the documents): the right outcome is a refusal. not_specified (the documents explicitly say they do not give the value): a refusal or a grounded statement that it is not specified is acceptable, answers are flagged for manual review. Permission, follow-up and injection cases arrive with M8 and M11.",
   "cases": [
     {
       "id": "A01",
@@ -231,25 +231,25 @@
     },
     {
       "id": "D01",
-      "type": "unanswerable",
+      "type": "not_specified",
       "question": "How many days of annual leave do I get?",
       "expected": []
     },
     {
       "id": "D02",
-      "type": "unanswerable",
+      "type": "not_specified",
       "question": "What is the maximum spindle temperature for the CNC machine?",
       "expected": []
     },
     {
       "id": "D03",
-      "type": "unanswerable",
+      "type": "not_specified",
       "question": "What tolerance applies to part X-100?",
       "expected": []
     },
     {
       "id": "D04",
-      "type": "unanswerable",
+      "type": "not_specified",
       "question": "What is the maintenance interval for the coolant pump?",
       "expected": []
     },

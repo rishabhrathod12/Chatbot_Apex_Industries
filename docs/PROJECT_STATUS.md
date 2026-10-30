@@ -2,7 +2,7 @@
 
 **Project:** Manufacturing AI Knowledge Assistant, Apex Precision Manufacturing Pvt. Ltd.
 **Last updated:** 2026-10-30
-**Current milestone:** M7 complete locally (real-LLM check pending an API key). Next: M8 (awaiting approval)
+**Current milestone:** M7 complete locally and measured. Next: M8 (awaiting approval)
 
 ## Milestone tracker
 
@@ -15,7 +15,7 @@
 | M4 | PDF/DOCX/TXT extraction and preprocessing | Done locally 2026-10-31 (committed, not pushed) |
 | M5 | Chunking and metadata management | Done locally 2026-10-31 (committed, not pushed) |
 | M6 | Embeddings and vector store integration (Qdrant, see ADR-0005) | Done locally 2026-10-31 (committed, not pushed) |
-| M7 | Basic RAG + first golden set | Done locally 2026-10-31 (committed, not pushed). **Not verified with a real LLM** (no API key yet) |
+| M7 | Basic RAG + first golden set | Done locally 2026-10-31 (committed, not pushed). Verified with real embeddings and `gpt-4.1-mini`; known weakness on near-miss questions, see `docs/retrieval-baseline.md` |
 | M8 | Citations and conversational memory | Not started |
 | M9 | Streamlit frontend | Not started |
 | M10 | PostgreSQL and enterprise document management | Not started |

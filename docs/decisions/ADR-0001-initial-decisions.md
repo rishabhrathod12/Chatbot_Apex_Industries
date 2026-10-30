@@ -67,4 +67,8 @@ Hallucination is reduced in layers, because no single one is reliable (see `docs
 
 Trade-off: strict rule 4 will occasionally discard a correct but uncited answer. For a company-policy assistant a false refusal is preferable to an unverifiable answer. Revisit with measured data.
 
-Settings that are placeholders until measured with real models: `CHAT_MODEL` (default `gpt-4.1-mini`, not confirmed for the account), `RETRIEVAL_MIN_SCORE` (0.25), `CHAT_TEMPERATURE` (0, set to none if a model rejects it).
+Measured outcome (2026-10-31, see `docs/retrieval-baseline.md`):
+- `CHAT_MODEL=gpt-4.1-mini` works on the account. `RETRIEVAL_MIN_SCORE` is now 0.40 (was a 0.25 placeholder), set from the measured score ranges.
+- 20/20 answerable questions answered with the right source, 0 false refusals.
+- Weakness: on a near-miss question (D06) the model sometimes answers a neighbouring question with a true, correctly cited sentence (2 of 9 runs). The citation check cannot catch this. A stricter prompt rule made it worse (5 of 5) and was reverted. Mitigation is measurement (RAGAS answer relevancy, M13) and a larger near-miss set, not more prompt tuning.
+- Golden-set types: `unanswerable` (refusal required), `not_specified` (refusal OR grounded "not specified" accepted, answers flagged for manual review).

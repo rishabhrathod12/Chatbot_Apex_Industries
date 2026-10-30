@@ -39,9 +39,10 @@ class Settings(BaseSettings):
     chat_temperature: float | None = 0.0  # None = leave to the model (some models require it)
     chat_max_tokens: int = 600
     retrieval_top_k: int = 5
-    # Chunks scoring below this are never shown to the model. Uncalibrated until it is measured
-    # with the real embedder (run `python -m eval.run --provider openai`).
-    retrieval_min_score: float = 0.25
+    # Chunks scoring below this are never shown to the model. Calibrated for text-embedding-3-small
+    # with the real embedder. 0.40 sits below every answerable golden question (lowest 0.458)
+    # and above only the clearest misses. See docs/retrieval-baseline.md before changing it.
+    retrieval_min_score: float = 0.40
 
     @model_validator(mode="after")
     def _require_secrets_in_production(self) -> "Settings":

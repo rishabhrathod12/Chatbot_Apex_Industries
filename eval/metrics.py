@@ -27,6 +27,16 @@ class Case:
     def answerable(self) -> bool:
         return self.type in ANSWERABLE_TYPES
 
+    @property
+    def not_specified(self) -> bool:
+        """The documents say outright that they don't give this value."""
+        return self.type == "not_specified"
+
+    @property
+    def refusal_expected(self) -> bool:
+        """Nothing relevant exists, so the only right outcome is a refusal."""
+        return self.type == "unanswerable"
+
 
 @dataclass(frozen=True)
 class RetrievedChunk:

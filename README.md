@@ -13,7 +13,8 @@ All sample documents in `data/sample_docs/` are fictional and not for operationa
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
-copy .env.example .env      # then fill in values (never commit .env)
+copy .env.example .env      # then put real values (like OPENAI_API_KEY) in .env ONLY.
+                            # Never put a key in .env.example: git tracks that file.
 pre-commit install
 ```
 

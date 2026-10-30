@@ -1,37 +1,54 @@
-# Retrieval Baseline (M7, 2026-10-31)
+# Retrieval and Answer Baseline (M7, measured 2026-10-31)
 
-Command: `python -m eval.run --provider hashing`
-Golden set: `eval/golden_set.json` (26 cases: 20 answerable, 6 unanswerable). Index: the six sample PDFs, 53 chunks.
+Golden set: `eval/golden_set.json`, 26 cases. 20 answerable (16 single-document, 2 multi-document, 2 exact-ID), 4 `not_specified` (the documents say outright they don't give the value), 2 `unanswerable` (nothing in the documents). Index: the six sample PDFs, 53 chunks.
 
-## Offline word-matching embedder (`hashing-256`)
+Commands: `python -m eval.run --provider openai` (retrieval) and `python -m eval.run_answers` (end-to-end answers).
 
-| Level | n | hit@1 | hit@3 | hit@5 | MRR |
+## 1. Retrieval
+
+| Embedder | Level | hit@1 | hit@3 | hit@5 | MRR |
 |---|---|---|---|---|---|
-| Document | 20 | 0.80 | 0.90 | 0.95 | 0.85 |
-| Page | 20 | 0.70 | 0.90 | 0.90 | 0.78 |
+| **OpenAI `text-embedding-3-small`** | document | 0.95 | 0.95 | **1.00** | **0.96** |
+| | page | 0.95 | 0.95 | 1.00 | 0.96 |
+| Offline word-matching (`hashing-256`) | document | 0.80 | 0.90 | 0.95 | 0.85 |
+| | page | 0.70 | 0.90 | 0.90 | 0.78 |
 
-Missed in the top 5: **A03** ("What should an operator do if an alarm is abnormal or a guard seems faulty?").
+With real embeddings every answerable question finds its source in the top 5 and nothing is missed. The offline embedder is only a plumbing baseline (a test guards it against regressions).
 
-**This is a plumbing baseline, not a quality measure.** The embedder only matches shared words. A test guards against regressions (`test_offline_baseline_has_not_regressed`).
+## 2. Relevance gate
 
-## Relevance threshold: the important finding
-
-Top-1 similarity per question, with this embedder:
+Top-1 similarity with the real embedder:
 
 | | min | median | max |
 |---|---|---|---|
-| Answerable questions | 0.179 | 0.274 | |
-| Unanswerable questions | | 0.339 | **0.465** |
+| Answerable (20) | 0.458 | 0.623 | |
+| Unanswerable (D05, D06) | | 0.428 | 0.429 |
 
-The ranges overlap: some unanswerable questions score *higher* than some answerable ones (they share generic words like "what is the"). So **a similarity threshold alone cannot separate answerable from unanswerable questions** here. The system therefore does not rely on it. Refusal rests on three layers:
+The ranges separate, but the gap (0.429 vs 0.458) is narrow and the unanswerable side has only 2 questions. `RETRIEVAL_MIN_SCORE` is set to **0.40**: below every answerable question, so it causes no false refusals on this set, and it only removes clear misses. The gate does not catch D05/D06 (0.429); the model's `NOT_FOUND` does. Raising it to about 0.44 would catch them but leaves a margin of about 0.015 each way, which is too thin to trust on this much data. Revisit with more questions at M13.
 
-1. Relevance gate (`RETRIEVAL_MIN_SCORE`, default 0.25): skips the model when nothing is close. It catches only the clearest misses.
-2. The model is told to reply `NOT_FOUND` when the excerpts don't answer the question.
-3. An answer that cites no excerpt that was really provided is discarded (`uncited_answer`).
+(With the offline embedder the ranges overlapped completely, which is why the gate is not the main defence.)
 
-Layers 2 and 3 have only been tested with a scripted model so far. How well they work with a real model is **not yet measured**.
+## 3. End-to-end answers (real embedder + `gpt-4.1-mini`, gate 0.40)
 
-## Still to measure (needs `OPENAI_API_KEY`)
+| Outcome | Result |
+|---|---|
+| Answerable questions answered | 20 / 20 |
+| ... citing the expected source document | 20 / 20 |
+| False refusals | 0 |
+| Wrong source cited | 0 |
+| `not_specified` questions (D01-D04) | 4 / 4 refused in the last runs. At gate 0.25, D03 was answered with a correct grounded statement ("the SOP does not define tolerances, use the engineering-approved specification [2]") |
+| Truly unanswerable: D05 (CEO) | refused every run |
+| Truly unanswerable: **D06 (Stores goods receipt)** | **refused in 7 of 9 runs; answered in 2 of 9** |
 
-1. `python -m eval.run --provider openai` for real retrieval quality, and to see whether the score ranges separate with real embeddings. Then set `RETRIEVAL_MIN_SCORE` from the data (the 0.25 default is a placeholder).
-2. Behaviour of the real chat model on the 6 unanswerable questions: does it reply `NOT_FOUND`, or answer with a citation anyway? Faithfulness scoring comes with RAGAS at M13.
+### Known weakness: related-but-different answers (D06)
+
+Occasionally the model answers D06 with a sentence that is genuinely in the Production SOP ("Stores issues material against the work order and records the batch or heat number [1]"). The citation is valid and the sentence is true, but it answers a *different* question (issuing material, not receiving goods). The citation check cannot catch this, because the cited text exists.
+
+I tried a stricter rule in the prompt ("related is not the same as relevant", with an unrelated example). It made things **worse**: D06 was answered in 5 of 5 runs, versus 2 of 9 before. I reverted it. Prompt wording alone is not a reliable fix here.
+
+What would address it: RAGAS **answer relevancy** and **faithfulness** (M13) to detect and count these cases, and more unanswerable and near-miss questions in the golden set so the rate is measured on more than one example. Until then the residual risk is real, roughly "the model answers a neighbouring question about 1 time in 5 on near-miss questions", measured on one question.
+
+## 4. Cost and variance notes
+
+- The model is not fully deterministic even at temperature 0, so single runs can differ. Repeat runs when judging a change (as in section 3).
+- A full `run_answers` run is about 22 chat calls plus embeddings, a small fraction of a cent.

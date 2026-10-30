@@ -5,16 +5,20 @@ Run with:  pytest -m live
 Costs a fraction of a cent. Not part of the normal suite.
 """
 
-import os
-
 import pytest
 
 from app.core.config import Settings
 from app.rag.ingestion.embedder import OpenAIEmbedder, get_embedder
 
+
+def _has_key() -> bool:
+    key = Settings().openai_api_key  # same sources as the app: environment, then .env
+    return bool(key and key.get_secret_value())
+
+
 pytestmark = [
     pytest.mark.live,
-    pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set"),
+    pytest.mark.skipif(not _has_key(), reason="OPENAI_API_KEY not set"),
 ]
 
 
@@ -24,7 +28,7 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 
 def test_real_embeddings_have_the_right_size_and_capture_meaning() -> None:
-    embedder = get_embedder(Settings(_env_file=None))  # type: ignore[call-arg]
+    embedder = get_embedder(Settings())
     assert isinstance(embedder, OpenAIEmbedder)
     question, answer, unrelated = embedder.embed(
         [
