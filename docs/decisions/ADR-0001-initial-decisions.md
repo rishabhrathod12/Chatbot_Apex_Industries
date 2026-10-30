@@ -39,3 +39,7 @@ Status: **Approved D1-D9 and ADR-0002 reordering** (user replied "yes", 2026-10-
 ## ADR-0003: PyMuPDF pinned below 2.0 (found at M4, 2026-10-31)
 
 `pymupdf` 2.0 crashed the interpreter (segmentation fault on `import pymupdf`) on Windows with Python 3.12.10. Version 1.28.2 works. The dependency is pinned as `pymupdf>=1.24,<2`. Revisit when 2.x is confirmed stable on this platform.
+
+## ADR-0004: Own section-aware splitter instead of LangChain's (M5, 2026-10-31)
+
+D2 said to use LangChain's text splitters. A generic splitter works on one flat string and loses which page each part came from, and page numbers are a core requirement (citations). `SectionChunker` packs paragraph/bullet units that each carry their page, so a chunk's `page_start`/`page_end` are exact. It is about 150 lines, deterministic, and fully tested. LangChain stays in use only where it helps (OpenAI wrappers at M6/M7). Chunk size is estimated at 4 characters per token. Swap in a real tokenizer if sizing ever matters.

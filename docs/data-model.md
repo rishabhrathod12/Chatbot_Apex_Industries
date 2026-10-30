@@ -19,6 +19,8 @@
 | `document_id` | str | Internal UUID |
 | `doc_code` | str | e.g. `APM-PROD-MAN-001`, from the PDF's metadata table |
 | `doc_title` | str | |
+| `source_name` | str | Original filename, used in citations |
+| `kind` | str | `body` or `title_block` |
 | `doc_version` | str | e.g. `1.0` |
 | `scope` | str | `enterprise` or `personal` |
 | `department` | str | Canonical value. Empty for personal |
