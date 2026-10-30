@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+from pathlib import Path
 
 from sqlalchemy import engine_from_config, pool
 
@@ -15,7 +16,11 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
-    return config.get_main_option("sqlalchemy.url") or get_settings().database_url
+    url = config.get_main_option("sqlalchemy.url") or get_settings().database_url
+    if url.startswith("sqlite:///"):
+        # SQLite creates the file but not its folder, and a fresh checkout has no storage/ yet.
+        Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
+    return url
 
 
 def run_migrations_offline() -> None:

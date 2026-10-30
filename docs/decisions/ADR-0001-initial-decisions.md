@@ -82,3 +82,15 @@ Measured outcome (2026-10-31, see `docs/retrieval-baseline.md`):
 5. **Retention:** conversations are kept until the user deletes them. Revisit at M14.
 
 Limitations: a saved answer is a snapshot and stays visible to its owner even if their access or the source document changes later. The rewrite step costs one extra model call per follow-up.
+
+## ADR-0009: Web interface design (M9 first version, 2026-10-31)
+
+1. **Thin client.** The Streamlit app holds no secrets and no business rules. It calls the API over HTTP (`frontend/api_client.py`) and shows what comes back. Streamlit runs server-side, so the browser never talks to the API directly and no CORS setup is needed.
+2. **Model output is treated as untrusted.** Answers are rendered as markdown, and a markdown image is fetched automatically by the browser, which could leak text through the image address if a document contained an injected instruction. So images are removed and links lose their address before display (`ui.safe_markdown`). Quotes copied from documents, file names and the user's own text are escaped so they show literally (`ui.escape_markdown`). Raw HTML is never enabled. Both helpers are tested.
+3. **Single source of truth.** After each question the page reloads the conversation from the API instead of keeping its own copy, so it cannot drift from what is stored.
+4. **The document list refreshes itself every 3 seconds** (a Streamlit fragment) so status changes from Processing to Ready without clicking. Checked in a real browser: it does not interfere with the delete confirmation.
+5. **Department and scope pickers are demo controls.** They stand in for permissions until M11; the sidebar says so.
+6. **Deep links:** `?page=documents` and `?c=<id>` (the id must be 32 hex characters, anything else is ignored).
+7. Upload size shown in the uploader matches the API limit (`maxUploadSize = 20` in `.streamlit/config.toml`).
+
+Verified in a real browser (Edge, driven by Playwright) against the live API with real OpenAI models: welcome screen, answer with sources and quote, refusal, document library, clicking an example question, typing a follow-up, upload of a text file, rejection of a fake PDF with a readable reason, and delete with confirmation. Playwright was used in a throwaway environment and is not a project dependency, so these browser checks are not part of the automated test suite. The suite covers the page logic with Streamlit's own test runner and a fake API.

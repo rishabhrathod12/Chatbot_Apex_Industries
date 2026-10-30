@@ -2,7 +2,7 @@
 
 **Project:** Manufacturing AI Knowledge Assistant, Apex Precision Manufacturing Pvt. Ltd.
 **Last updated:** 2026-10-30
-**Current milestone:** M8 complete. A first version of the M9 Streamlit frontend is being built.
+**Current milestone:** M8 complete, first version of M9 (web interface) running. Next: decide M9 polish vs M10 (awaiting approval)
 
 ## Milestone tracker
 
@@ -17,7 +17,7 @@
 | M6 | Embeddings and vector store integration (Qdrant, see ADR-0005) | Done locally 2026-10-31 (committed, not pushed) |
 | M7 | Basic RAG + first golden set | Done locally 2026-10-31 (committed, not pushed). Verified with real embeddings and `gpt-4.1-mini`; known weakness on near-miss questions, see `docs/retrieval-baseline.md` |
 | M8 | Citations and conversational memory | Done locally 2026-10-31. Follow-ups resolved 3/3 with the real model |
-| M9 | Streamlit frontend | Not started |
+| M9 | Streamlit frontend | First version done 2026-10-31 (chat, sources, conversations, documents). Not yet: login (M11), polish for phones, accessibility review |
 | M10 | PostgreSQL and enterprise document management | Not started |
 | M11 | Authentication, RBAC, department permissions | Not started |
 | M12 | Hybrid search and reranking | Not started |

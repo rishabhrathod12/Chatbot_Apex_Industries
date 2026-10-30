@@ -18,6 +18,21 @@ copy .env.example .env      # then put real values (like OPENAI_API_KEY) in .env
 pre-commit install
 ```
 
+## Web interface
+
+One command starts the API and the web interface and opens the browser:
+
+```powershell
+.\scripts\dev.ps1          # web interface http://localhost:8501, API docs http://localhost:8000/docs
+```
+
+Then open **Documents**, click *Load the 6 sample documents*, wait for each to show **Ready**, and
+go to **Chat**. Only one API process can use the vector folder at a time, so close an old API
+window before starting another. Set `API_BASE_URL` if the API runs somewhere else.
+
+Links work as bookmarks: `http://localhost:8501/?page=documents` opens the library and
+`http://localhost:8501/?c=<conversation id>` opens a saved chat.
+
 ## Database
 
 ```powershell
