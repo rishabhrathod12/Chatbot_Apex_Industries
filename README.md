@@ -17,6 +17,14 @@ copy .env.example .env      # then fill in values (never commit .env)
 pre-commit install
 ```
 
+## Database
+
+```powershell
+cd backend
+alembic upgrade head        # creates storage/app.db (SQLite) by default
+uvicorn app.main:app --reload
+```
+
 ## Quality checks
 
 ```powershell

@@ -7,6 +7,9 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic-settings>=2.5",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -40,3 +43,9 @@ strict = true
 mypy_path = "backend"
 packages = ["app"]
 explicit_package_bases = true
+
+[tool.ruff.lint.per-file-ignores]
+"backend/alembic/versions/*" = ["I", "UP", "E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Form"]

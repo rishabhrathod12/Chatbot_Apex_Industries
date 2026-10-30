@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./storage/app.db"
     chroma_path: str = "./chroma_db"
     upload_dir: str = "./storage/uploads"
+    max_upload_mb: int = 20
+    max_files_per_request: int = 10
 
     @model_validator(mode="after")
     def _require_secrets_in_production(self) -> "Settings":
