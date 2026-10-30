@@ -35,6 +35,11 @@ class Document(Base):
     scope: Mapped[str] = mapped_column(String(16))  # "personal" | "enterprise"
     owner_id: Mapped[str] = mapped_column(String(64))
     department: Mapped[str] = mapped_column(String(32), default="")  # "" for personal
+    # "department": visible to that department. "company": visible to every logged-in user.
+    # "personal": private to the owner.
+    visibility: Mapped[str] = mapped_column(
+        String(16), default="department", server_default="department"
+    )
     dedupe_key: Mapped[str] = mapped_column(String(128))
     original_filename: Mapped[str] = mapped_column(String(255))
     stored_filename: Mapped[str] = mapped_column(String(64))

@@ -1,8 +1,7 @@
-"""TEMPORARY search endpoint for development and retrieval checks.
+"""Search endpoint for development and retrieval checks. Returns raw chunks, not answers.
 
-Until M11 there is no login, so it acts as the single dev user. The optional `department` field is
-a stand-in: from M11 the allowed departments come from the user's token and this field goes away.
-It returns raw chunks, not generated answers (those arrive in M7).
+What a user can find is decided by the server from who they are. The optional `department` only
+narrows the search to one department's documents. It can never reveal more than the user may see.
 """
 
 from typing import Literal
@@ -10,13 +9,14 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import get_current_user_id, get_embedder_provider, get_store_provider
+from app.api.deps import get_current_principal, get_embedder_provider, get_store_provider
 from app.core.config import Settings, get_settings
 from app.core.departments import canonical_department
+from app.core.permissions import Principal, build_search_filter
 from app.rag.ingestion.embedder import EmbeddingError, embedding_dimensions
 from app.rag.ingestion.pipeline import EmbedderProvider, StoreProvider
 from app.rag.retrieval import semantic_search
-from app.rag.vectorstore import SearchFilter, VectorStoreError
+from app.rag.vectorstore import VectorStoreError
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -52,17 +52,14 @@ def search(
     settings: Settings = Depends(get_settings),
     embedder_provider: EmbedderProvider = Depends(get_embedder_provider),
     store_provider: StoreProvider = Depends(get_store_provider),
-    user_id: str = Depends(get_current_user_id),
+    principal: Principal = Depends(get_current_principal),
 ) -> list[SearchHitOut]:
-    if body.scope == "personal":
-        search_filter = SearchFilter(owner_id=user_id)
-    elif body.department is not None:
-        dept = canonical_department(body.department)
-        if dept is None:
+    narrow = None
+    if body.scope == "enterprise" and body.department is not None:
+        narrow = canonical_department(body.department)
+        if narrow is None:
             raise HTTPException(status_code=422, detail="invalid_department")
-        search_filter = SearchFilter(departments=[dept])
-    else:
-        search_filter = None
+    search_filter = build_search_filter(principal, body.scope, narrow)
 
     try:
         embedder = embedder_provider()

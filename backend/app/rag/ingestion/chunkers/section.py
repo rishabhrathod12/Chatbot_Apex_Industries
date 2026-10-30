@@ -146,6 +146,7 @@ class SectionChunker:
                         doc_version=version,
                         scope=context.scope,
                         department=context.department,
+                        visibility=context.visibility,
                         owner_id=context.owner_id,
                         source_name=context.source_name,
                         content_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),

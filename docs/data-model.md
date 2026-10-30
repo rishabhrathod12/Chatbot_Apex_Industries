@@ -81,3 +81,12 @@ Two embedded Qdrant collections: `enterprise_chunks` and `personal_chunks`. Cosi
 - `sources_json` is a snapshot of the sources shown with the answer, including the verbatim `quote`. If the source document is later changed or deleted, the saved answer keeps showing what it showed at the time.
 - The user's own wording is stored as typed. The rewritten standalone question (follow-ups only) is stored on the assistant message.
 - A conversation is capped at 200 messages.
+
+## 8. Users and permissions (M11)
+
+- `users` (id, email unique and lower-case, full_name, password_hash, role, is_active, created_at). Role is `super_admin`, `department_manager` or `employee`.
+- `user_departments` (user_id, department). A user can belong to several departments. Unique per pair.
+- `refresh_tokens` (id, user_id, token_hash unique, created_at, expires_at, revoked_at). Only the SHA-256 of the token is stored.
+- `audit_log` (id, user_id, action, outcome `ok|denied|failed`, target_type, target_id, created_at). Ids and codes only.
+- `documents.visibility`: `department` (default), `company` or `personal`. The same value is stored on every chunk in the search index (`visibility` payload field), which is what lets one search filter say "my departments, or anything company-wide".
+- Search filter (`SearchFilter`): `departments` + `include_company_wide` (allowed set), `narrow_department` (shrinks only), `owner_id` (personal). An empty allowed set returns nothing.

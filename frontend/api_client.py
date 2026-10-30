@@ -1,5 +1,9 @@
-"""A small client for the backend API. The frontend holds no secrets and no business rules:
-everything it shows comes from these calls."""
+"""A small client for the backend API. The frontend holds no business rules: everything it shows
+comes from these calls, and the server decides what each user may see and do.
+
+The client keeps the login tokens in memory for one browser session. When the short-lived access
+token expires it quietly swaps the refresh token for a new pair and retries once.
+"""
 
 import os
 from typing import Any
@@ -12,14 +16,19 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8000/api/v1"
 class ApiError(Exception):
     """The backend refused or failed a request. `detail` is its short machine-readable reason."""
 
-    def __init__(self, status: int, detail: str) -> None:
+    def __init__(self, status: int, detail: str, retry_after: int | None = None) -> None:
         super().__init__(f"{status}: {detail}")
         self.status = status
         self.detail = detail
+        self.retry_after = retry_after
 
 
 class ApiUnreachable(Exception):
     """The backend could not be reached at all."""
+
+
+class SessionExpired(Exception):
+    """The login ended (refresh token expired or revoked). The user has to sign in again."""
 
 
 def base_url() -> str:
@@ -31,8 +40,53 @@ class ApiClient:
         self._url = (url or base_url()).rstrip("/")
         # Answering can take a while (retrieval, then the language model), hence the long timeout.
         self._http = client or httpx.Client(timeout=httpx.Timeout(120.0, connect=5.0))
+        self._access: str | None = None
+        self._refresh: str | None = None
+        self.user: dict[str, Any] | None = None
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+    # ------------------------------------------------------------------ session
+
+    @property
+    def is_logged_in(self) -> bool:
+        return self._access is not None
+
+    def _store(self, pair: dict[str, Any]) -> None:
+        self._access = pair["access_token"]
+        self._refresh = pair["refresh_token"]
+        self.user = pair["user"]
+
+    def _forget(self) -> None:
+        self._access = self._refresh = self.user = None
+
+    def login(self, email: str, password: str) -> dict[str, Any]:
+        pair = self._send("POST", "/auth/login", json={"email": email, "password": password})
+        self._store(pair)
+        assert self.user is not None
+        return self.user
+
+    def logout(self) -> None:
+        refresh, self._refresh = self._refresh, None
+        try:
+            if refresh:
+                self._send("POST", "/auth/logout", json={"refresh_token": refresh})
+        except (ApiError, ApiUnreachable):
+            pass  # the local session ends either way
+        finally:
+            self._forget()
+
+    def _renew(self) -> bool:
+        if not self._refresh:
+            return False
+        try:
+            pair = self._send("POST", "/auth/refresh", json={"refresh_token": self._refresh})
+        except ApiError:
+            return False
+        self._store(pair)
+        return True
+
+    # ------------------------------------------------------------------ requests
+
+    def _send(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
             response = self._http.request(method, f"{self._url}{path}", **kwargs)
         except httpx.TransportError as exc:
@@ -47,14 +101,31 @@ class ApiClient:
                     return body  # an upload where every file was rejected still has a useful body
             except ValueError:
                 pass
-            raise ApiError(response.status_code, detail)
+            retry = response.headers.get("retry-after", "")
+            raise ApiError(response.status_code, detail, int(retry) if retry.isdigit() else None)
         return response.json() if response.content else None
 
-    # ---- health and documents ----
+    def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+        """A request as the logged-in user. One automatic renewal if the token has expired."""
+        if not self._access:
+            raise SessionExpired
+        for attempt in (1, 2):
+            headers = {"Authorization": f"Bearer {self._access}"}
+            try:
+                return self._send(method, path, headers=headers, **kwargs)
+            except ApiError as error:
+                if error.status != 401:
+                    raise
+                if attempt == 2 or not self._renew():
+                    self._forget()
+                    raise SessionExpired from error
+        raise SessionExpired  # not reached
+
+    # ------------------------------------------------------------------ health and documents
 
     def healthy(self) -> bool:
         try:
-            return bool(self._request("GET", "/health")["status"] == "ok")
+            return bool(self._send("GET", "/health")["status"] == "ok")
         except (ApiUnreachable, ApiError):
             return False
 
@@ -62,11 +133,17 @@ class ApiClient:
         return list(self._request("GET", "/documents"))
 
     def upload(
-        self, files: list[tuple[str, bytes]], scope: str, department: str | None
+        self,
+        files: list[tuple[str, bytes]],
+        scope: str,
+        department: str | None,
+        company_wide: bool = False,
     ) -> list[dict[str, Any]]:
         data = {"scope": scope}
         if department:
             data["department"] = department
+        if scope == "enterprise":
+            data["visibility"] = "company" if company_wide else "department"
         body = self._request(
             "POST",
             "/documents",
@@ -81,7 +158,7 @@ class ApiClient:
     def delete_document(self, document_id: str) -> None:
         self._request("DELETE", f"/documents/{document_id}")
 
-    # ---- chat ----
+    # ------------------------------------------------------------------ chat
 
     def chat(
         self,
@@ -105,3 +182,26 @@ class ApiClient:
 
     def delete_conversation(self, conversation_id: str) -> None:
         self._request("DELETE", f"/conversations/{conversation_id}")
+
+    # ------------------------------------------------------------------ users (Super Admin)
+
+    def list_users(self) -> list[dict[str, Any]]:
+        return list(self._request("GET", "/users"))
+
+    def create_user(
+        self, email: str, full_name: str, password: str, role: str, departments: list[str]
+    ) -> dict[str, Any]:
+        body = {
+            "email": email,
+            "full_name": full_name,
+            "password": password,
+            "role": role,
+            "departments": departments,
+        }
+        return dict(self._request("POST", "/users", json=body))
+
+    def update_user(self, user_id: str, **changes: Any) -> dict[str, Any]:
+        return dict(self._request("PATCH", f"/users/{user_id}", json=changes))
+
+    def reset_password(self, user_id: str, password: str) -> None:
+        self._request("POST", f"/users/{user_id}/password", json={"password": password})

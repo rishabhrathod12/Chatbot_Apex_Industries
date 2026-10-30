@@ -10,6 +10,7 @@ class DocumentOut(BaseModel):
     id: str
     scope: str
     department: str
+    visibility: str
     original_filename: str
     file_ext: str
     size_bytes: int

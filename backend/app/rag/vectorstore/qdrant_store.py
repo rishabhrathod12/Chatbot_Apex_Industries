@@ -66,9 +66,22 @@ def _to_qdrant_filter(search_filter: SearchFilter | None) -> models.Filter | Non
         return None
     must: list[models.Condition] = []
     if search_filter.departments is not None:
+        either: list[models.Condition] = []
+        if search_filter.departments:
+            either.append(
+                models.FieldCondition(
+                    key="department", match=models.MatchAny(any=list(search_filter.departments))
+                )
+            )
+        if search_filter.include_company_wide:
+            either.append(
+                models.FieldCondition(key="visibility", match=models.MatchValue(value="company"))
+            )
+        must.append(models.Filter(should=either))
+    if search_filter.narrow_department is not None:
         must.append(
             models.FieldCondition(
-                key="department", match=models.MatchAny(any=list(search_filter.departments))
+                key="department", match=models.MatchValue(value=search_filter.narrow_department)
             )
         )
     if search_filter.owner_id is not None:
@@ -87,10 +100,13 @@ def _to_qdrant_filter(search_filter: SearchFilter | None) -> models.Filter | Non
 
 
 def _blocks_everything(search_filter: SearchFilter | None) -> bool:
-    return search_filter is not None and any(
-        value is not None and len(value) == 0
-        for value in (search_filter.departments, search_filter.document_ids)
-    )
+    """Filters that can match nothing at all, so we do not even ask the store."""
+    if search_filter is None:
+        return False
+    if search_filter.document_ids is not None and len(search_filter.document_ids) == 0:
+        return True
+    no_departments = search_filter.departments is not None and len(search_filter.departments) == 0
+    return no_departments and not search_filter.include_company_wide
 
 
 class QdrantVectorStore:

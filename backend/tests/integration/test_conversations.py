@@ -5,14 +5,14 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from app.api.deps import get_chat_model_provider, get_current_user_id
+from app.api.deps import get_chat_model_provider, get_current_principal
 from app.core.config import Settings, get_settings
 from app.core.database import get_session_factory
 from app.models import Message
 from app.rag.generation import LlmError
 from app.rag.generation.prompts import NOT_FOUND_MESSAGE
 from app.services import chat as chat_service
-from tests.conftest import SAMPLE_DOCS, ScriptedChat
+from tests.conftest import SAMPLE_DOCS, ScriptedChat, act_as_principal
 
 CHAT = "/api/v1/chat"
 CONVERSATIONS = "/api/v1/conversations"
@@ -41,7 +41,7 @@ def _use(client: TestClient, model: ScriptedChat) -> None:
 
 
 def _act_as(client: TestClient, user: str) -> None:
-    client.app.dependency_overrides[get_current_user_id] = lambda: user  # type: ignore[attr-defined]
+    client.app.dependency_overrides[get_current_principal] = lambda: act_as_principal(user)  # type: ignore[attr-defined]
 
 
 def _ask(client: TestClient, question: str = Q1, **body: Any) -> Any:

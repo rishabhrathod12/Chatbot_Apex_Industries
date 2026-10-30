@@ -9,14 +9,19 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_principal
 from app.core.config import Settings, get_settings
 from app.core.database import Base, get_engine, get_session_factory
+from app.core.permissions import Principal, Role
+from app.core.rate_limit import LoginLimiter
 from app.main import create_app
 from app.models import Document
 from app.rag.generation.llm import ChatMessage, LlmError
 from app.rag.ingestion.embedder import HashingEmbedder
 from app.rag.vectorstore import QdrantVectorStore, close_client
 from app.repositories import documents as repo
+from app.schemas.auth import UserCreate
+from app.services import users as user_service
 from eval.indexing import index_sample_documents
 
 SAMPLE_DOCS = Path(__file__).resolve().parents[2] / "data" / "sample_docs"
@@ -33,6 +38,9 @@ def settings(tmp_path: Path) -> Iterator[Settings]:
         embedding_provider="hashing",  # offline: no API key and no network in the normal suite
         max_upload_mb=1,
         max_files_per_request=3,
+        jwt_secret_key="test-secret-" + "x" * 32,
+        password_hash_cost_log2=10,  # fast hashing for tests (production uses 15)
+        login_max_failures=3,
     )
     yield value
     close_client(value.vector_store_path)  # embedded Qdrant locks its folder until closed
@@ -88,6 +96,39 @@ def client(settings: Settings) -> Iterator[TestClient]:
     Base.metadata.create_all(get_engine(settings.database_url))
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: settings
+    app.state.login_limiter = LoginLimiter(
+        settings.login_max_failures, settings.login_window_minutes * 60
+    )
+    # Most tests are about features, not login, so they act as a logged-in Super Admin.
+    # tests/integration/test_auth*.py use real tokens instead (see `raw_client`).
+    app.dependency_overrides[get_current_principal] = lambda: act_as_principal("dev-user")
+    yield TestClient(app)
+    get_engine(settings.database_url).dispose()
+
+
+def act_as_principal(
+    user_id: str,
+    role: Role = Role.SUPER_ADMIN,
+    departments: frozenset[str] = frozenset(),
+) -> Principal:
+    return Principal(
+        user_id=user_id,
+        email=f"{user_id}@example.test",
+        full_name=user_id,
+        role=role,
+        departments=departments,
+    )
+
+
+@pytest.fixture
+def raw_client(settings: Settings) -> Iterator[TestClient]:
+    """The real app with real authentication (no overrides except the test settings)."""
+    Base.metadata.create_all(get_engine(settings.database_url))
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.state.login_limiter = LoginLimiter(
+        settings.login_max_failures, settings.login_window_minutes * 60
+    )
     yield TestClient(app)
     get_engine(settings.database_url).dispose()
 
@@ -147,3 +188,32 @@ def add_stored_document(
         file_hash=f"hash-{name}-{scope}-{department}",
     )
     return repo.add(db, document)
+
+
+PASSWORD = "Correct-Horse-Battery-9"
+
+
+def add_user(
+    session: Session,
+    settings: Settings,
+    email: str,
+    role: Role = Role.EMPLOYEE,
+    departments: list[str] | None = None,
+    password: str = PASSWORD,
+):  # noqa: ANN201
+    """Create a real user in the test database."""
+    data = UserCreate(
+        email=email,
+        full_name=email.split("@")[0],
+        password=password,
+        role=role,
+        departments=departments or [],
+    )
+    return user_service.create_user(session, settings, None, data)
+
+
+def login(client: TestClient, email: str, password: str = PASSWORD) -> dict[str, str]:
+    """Log in through the real endpoint and return the Authorization header for that user."""
+    response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200, response.text
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}

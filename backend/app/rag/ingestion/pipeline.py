@@ -23,6 +23,12 @@ EmbedderProvider = Callable[[], Embedder]
 StoreProvider = Callable[[Scope, int], VectorStore]
 
 
+def _visibility(document: Document) -> Literal["personal", "department", "company"]:
+    if document.scope == "personal":
+        return "personal"
+    return "company" if document.visibility == "company" else "department"
+
+
 def _fail(db: Session, document: Document, reason: str) -> None:
     document.status = "failed"
     document.status_reason = reason
@@ -66,6 +72,7 @@ def ingest_document(
             owner_id=document.owner_id,
             source_name=document.original_filename,
             department=document.department,
+            visibility=_visibility(document),
         )
         chunker = SectionChunker(settings.chunk_max_tokens, settings.chunk_overlap_tokens)
         chunks = chunker.chunk(extracted, context)

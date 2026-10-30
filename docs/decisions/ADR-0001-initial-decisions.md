@@ -94,3 +94,20 @@ Limitations: a saved answer is a snapshot and stays visible to its owner even if
 7. Upload size shown in the uploader matches the API limit (`maxUploadSize = 20` in `.streamlit/config.toml`).
 
 Verified in a real browser (Edge, driven by Playwright) against the live API with real OpenAI models: welcome screen, answer with sources and quote, refusal, document library, clicking an example question, typing a follow-up, upload of a text file, rejection of a fake PDF with a readable reason, and delete with confirmation. Playwright was used in a throwaway environment and is not a project dependency, so these browser checks are not part of the automated test suite. The suite covers the page logic with Streamlit's own test runner and a fake API.
+
+## ADR-0010: Authentication and permissions (M11, 2026-10-31)
+
+Decided by the user: the Safety manual and HR policy are company-wide, everything else is department-only; Department Managers may publish company-wide for their own department.
+
+1. **Passwords: scrypt from the standard library**, not argon2 or bcrypt. Both are fine; scrypt avoids another native package, and this machine has already crashed on native wheels (ChromaDB, PyMuPDF 2.0). Cost (N=2^15) is stored in each hash so it can be raised later. Tests use a lower cost. Revisit argon2 if there is a reason to.
+2. **Access tokens: short-lived HS256 JWTs (30 min) that carry only the user id.** Role and departments are looked up on every request, so changes and account disabling apply at once. This costs one small database read per request and is worth it.
+3. **Refresh tokens: random, single-use, rotated, stored hashed.** Reusing a spent one ends all of that user's sessions.
+4. **404 for what you cannot see, 403 for what you can see but not change.** Ids cannot be probed.
+5. **Personal data is private from everyone, including Super Admins.** Admins manage the company library, not people's private files or chats.
+6. **One module decides access** (`core/permissions.py`); the search filter is built from the logged-in user on the server and applied inside the vector search. The department box in the UI can only narrow.
+7. **No default account.** The first Super Admin is created on the command line. `seed-demo` is development only.
+8. **Failed-login auditing stores a fingerprint, not the email.**
+9. **The login limiter is in memory** (single process). Redis or similar at M14.
+10. **Existing M3-M10 data:** documents and conversations created before login belonged to a placeholder user and are not visible to anyone after upgrading. For development, wipe `storage/` and `vector_db/` and re-upload (the `.gitignore`d demo data). A real deployment would migrate owners first.
+
+Bug found by the tests while building this: changing a user's departments to an overlapping set crashed with a 500 (the old rows were cleared and re-added, violating the unique constraint). Fixed by writing only the difference.

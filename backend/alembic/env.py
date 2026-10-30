@@ -3,10 +3,10 @@ from pathlib import Path
 
 from sqlalchemy import engine_from_config, pool
 
+import app.models  # noqa: F401  (registers every table on Base.metadata)
 from alembic import context
 from app.core.config import get_settings
 from app.core.database import Base
-from app.models import Conversation, Document, Message  # noqa: F401  (register the tables)
 
 config = context.config
 if config.config_file_name is not None:

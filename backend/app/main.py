@@ -6,9 +6,10 @@ from collections.abc import Awaitable, Callable
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from app.api import chat, conversations, documents, health, search
+from app.api import auth, chat, conversations, documents, health, search, users
 from app.core.config import get_settings
 from app.core.logging import configure_logging, request_id_ctx
+from app.core.rate_limit import LoginLimiter
 
 logger = logging.getLogger("app.request")
 
@@ -17,7 +18,18 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
 
-    app = FastAPI(title="Apex Knowledge Assistant", version="0.1.0")
+    # The interactive API pages describe every endpoint, so they are not served in production.
+    show_docs = settings.app_env != "production"
+    app = FastAPI(
+        title="Apex Knowledge Assistant",
+        version="0.1.0",
+        docs_url="/docs" if show_docs else None,
+        redoc_url="/redoc" if show_docs else None,
+        openapi_url="/openapi.json" if show_docs else None,
+    )
+    app.state.login_limiter = LoginLimiter(
+        settings.login_max_failures, settings.login_window_minutes * 60
+    )
 
     @app.middleware("http")
     async def request_context(
@@ -51,6 +63,8 @@ def create_app() -> FastAPI:
             request_id_ctx.reset(token)
 
     app.include_router(health.router, prefix="/api/v1")
+    app.include_router(auth.router, prefix="/api/v1")
+    app.include_router(users.router, prefix="/api/v1")
     app.include_router(documents.router, prefix="/api/v1")
     app.include_router(search.router, prefix="/api/v1")
     app.include_router(chat.router, prefix="/api/v1")

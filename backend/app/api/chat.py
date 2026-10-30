@@ -1,7 +1,7 @@
 """Question answering over the indexed documents, with saved conversations.
 
-TEMPORARY until M11: there is no login yet, so the user is the dev user, and an optional
-`department` stands in for the departments that will come from the user's token.
+Which documents an answer may come from is decided by the server from who is asking. The optional
+`department` only narrows the search to one department. It never reveals more than the user may see.
 """
 
 from typing import Annotated, Literal
@@ -13,17 +13,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     ChatModelProvider,
     get_chat_model_provider,
-    get_current_user_id,
+    get_current_principal,
     get_embedder_provider,
     get_store_provider,
 )
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.core.departments import canonical_department
+from app.core.permissions import Principal, build_search_filter
 from app.rag.generation import LlmError
 from app.rag.ingestion.embedder import EmbeddingError, embedding_dimensions
 from app.rag.ingestion.pipeline import EmbedderProvider, StoreProvider
-from app.rag.vectorstore import SearchFilter, VectorStoreError
+from app.rag.vectorstore import VectorStoreError
 from app.schemas.chat import ChatAnswer
 from app.services import chat as chat_service
 
@@ -48,22 +49,19 @@ def chat(
     embedder_provider: EmbedderProvider = Depends(get_embedder_provider),
     store_provider: StoreProvider = Depends(get_store_provider),
     chat_model_provider: ChatModelProvider = Depends(get_chat_model_provider),
-    user_id: str = Depends(get_current_user_id),
+    principal: Principal = Depends(get_current_principal),
 ) -> ChatAnswer:
-    if body.scope == "personal":
-        search_filter: SearchFilter | None = SearchFilter(owner_id=user_id)
-    elif body.department is not None:
-        dept = canonical_department(body.department)
-        if dept is None:
+    narrow = None
+    if body.scope == "enterprise" and body.department is not None:
+        narrow = canonical_department(body.department)
+        if narrow is None:
             raise HTTPException(status_code=422, detail="invalid_department")
-        search_filter = SearchFilter(departments=[dept])
-    else:
-        search_filter = None
+    search_filter = build_search_filter(principal, body.scope, narrow)
 
     try:
         return chat_service.chat(
             db,
-            user_id=user_id,
+            user_id=principal.user_id,
             question=body.question,
             conversation_id=body.conversation_id,
             embedder=embedder_provider(),

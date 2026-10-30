@@ -13,6 +13,7 @@ class DocumentContext(BaseModel):
     owner_id: str
     source_name: str  # original filename, used in citations
     department: str = ""  # canonical code, empty for personal documents
+    visibility: Literal["personal", "department", "company"] = "department"
     doc_version: str | None = None  # falls back to the version in the cover-page metadata
 
 
@@ -30,6 +31,7 @@ class Chunk(BaseModel):
     doc_version: str
     scope: Literal["personal", "enterprise"]
     department: str
+    visibility: Literal["personal", "department", "company"]
     owner_id: str
     source_name: str
     content_hash: str
@@ -57,6 +59,7 @@ class Chunk(BaseModel):
             "doc_version": self.doc_version,
             "scope": self.scope,
             "department": self.department,
+            "visibility": self.visibility,
             "owner_id": self.owner_id,
             "source_name": self.source_name,
             "content_hash": self.content_hash,

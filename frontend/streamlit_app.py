@@ -2,6 +2,7 @@
 
 Run from the repository root:   streamlit run frontend/streamlit_app.py
 It talks to the API (default http://127.0.0.1:8000/api/v1, override with API_BASE_URL).
+The server decides what each user may see and do; this page only shows the result.
 """
 
 import re
@@ -11,7 +12,7 @@ from typing import Any
 import streamlit as st
 
 import ui
-from api_client import ApiClient, ApiError, ApiUnreachable, base_url
+from api_client import ApiClient, ApiError, ApiUnreachable, SessionExpired, base_url
 
 SAMPLE_DIR = Path(__file__).resolve().parents[1] / "data" / "sample_docs"
 ALL_DEPARTMENTS = "All departments"
@@ -19,6 +20,7 @@ COMPANY_SCOPE = "Company documents"
 PERSONAL_SCOPE = "My own documents"
 CHAT_PAGE = "💬 Chat"
 DOCUMENTS_PAGE = "📄 Documents"
+USERS_PAGE = "👥 Users"
 _CONVERSATION_ID = re.compile(r"^[0-9a-f]{32}$")
 
 
@@ -29,24 +31,76 @@ def api() -> ApiClient:
     return client
 
 
+def current_user() -> dict[str, Any]:
+    user = api().user
+    assert user is not None
+    return user
+
+
+def session_ended() -> None:
+    """The login is no longer valid: go back to the sign-in page with an explanation."""
+    st.session_state.pop("conversation_id", None)
+    st.session_state["notice"] = "Your session ended. Please sign in again."
+    st.rerun()
+
+
+# ----------------------------------------------------------------------------- sign in
+
+
+def login_page() -> None:
+    _, middle, _ = st.columns([1, 2, 1])
+    with middle:
+        st.markdown("## 🏭 Apex Knowledge Assistant")
+        st.caption("Apex Precision Manufacturing Pvt. Ltd. · fictional sample data")
+        if notice := st.session_state.pop("notice", None):
+            st.info(notice)
+        with st.form("login"):
+            email = st.text_input("Email")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Sign in", type="primary", use_container_width=True)
+        if submitted:
+            try:
+                api().login(email, password)
+            except ApiError as error:
+                st.error(ui.retry_message(error), icon="🔒")
+                return
+            except ApiUnreachable:
+                st.error("Cannot reach the API. Is it running?", icon="🔌")
+                return
+            st.rerun()
+        st.caption("Accounts are created by a Super Admin. There is no self sign-up.")
+
+
 # ----------------------------------------------------------------------------- sidebar
 
 
 def sidebar() -> tuple[str, str, str | None]:
     """Draw the sidebar. Returns (page, scope, department)."""
+    user = current_user()
     with st.sidebar:
         st.markdown("### 🏭 Apex Precision Manufacturing")
         st.caption("Knowledge Assistant · fictional sample data")
 
-        if api().healthy():
-            st.success("API connected", icon="✅")
-        else:
-            st.error("API not reachable", icon="🔌")
-            st.caption(f"Expected at `{base_url()}`")
+        with st.container(border=True):
+            st.markdown(f"**{user['full_name']}**")
+            places = ", ".join(ui.department_label(d) for d in user["departments"]) or "All"
+            st.caption(f"{ui.role_label(user['role'])} · {places}")
+            if st.button("Sign out", use_container_width=True):
+                api().logout()
+                st.session_state.pop("conversation_id", None)
+                st.rerun()
 
-        start = 1 if st.query_params.get("page") == "documents" else 0
+        pages = [CHAT_PAGE, DOCUMENTS_PAGE]
+        if user["role"] == "super_admin":
+            pages.append(USERS_PAGE)
+        wanted = {"documents": DOCUMENTS_PAGE, "users": USERS_PAGE}.get(
+            str(st.query_params.get("page", "")), CHAT_PAGE
+        )
         page = st.radio(
-            "Go to", [CHAT_PAGE, DOCUMENTS_PAGE], index=start, label_visibility="collapsed"
+            "Go to",
+            pages,
+            index=pages.index(wanted) if wanted in pages else 0,
+            label_visibility="collapsed",
         )
 
         st.divider()
@@ -57,10 +111,12 @@ def sidebar() -> tuple[str, str, str | None]:
         scope = "enterprise" if scope_label == COMPANY_SCOPE else "personal"
         department: str | None = None
         if scope == "enterprise":
-            choice = st.selectbox("Department", [ALL_DEPARTMENTS, *ui.DEPARTMENTS.values()])
+            choice = st.selectbox("Only in department", [ALL_DEPARTMENTS, *ui.DEPARTMENTS.values()])
             if choice != ALL_DEPARTMENTS:
                 department = next(code for code, name in ui.DEPARTMENTS.items() if name == choice)
-            st.caption("Demo control. Once login arrives, your departments come from your account.")
+            st.caption(
+                "Narrows the search. You only ever get answers from documents you can access."
+            )
 
         if page == CHAT_PAGE:
             st.divider()
@@ -139,7 +195,7 @@ def load_messages() -> list[dict[str, Any]]:
     try:
         return list(api().get_conversation(conversation_id)["messages"])
     except ApiError:
-        st.session_state.pop("conversation_id", None)  # it was deleted elsewhere
+        st.session_state.pop("conversation_id", None)  # deleted, or not yours
         return []
 
 
@@ -186,39 +242,51 @@ def chat_page(scope: str, department: str | None) -> None:
 # ----------------------------------------------------------------------------- documents
 
 
-def upload_section(scope: str) -> None:
+def target_label(code: str) -> str:
+    if not code:
+        return "My own documents (private)"
+    return f"Company library · {ui.department_label(code)}"
+
+
+def upload_section() -> None:
+    user = current_user()
+    targets = ui.upload_targets(user)
     st.subheader("Add documents")
+
     left, right = st.columns([3, 2])
     with left:
         files = st.file_uploader(
             "PDF, DOCX or TXT files", type=["pdf", "docx", "txt"], accept_multiple_files=True
         )
     with right:
-        target = st.radio(
-            "Add to", [COMPANY_SCOPE, PERSONAL_SCOPE], index=0 if scope == "enterprise" else 1
-        )
-        department = None
-        if target == COMPANY_SCOPE:
-            name = st.selectbox("Department", list(ui.DEPARTMENTS.values()), key="upload-dept")
-            department = next(code for code, label in ui.DEPARTMENTS.items() if label == name)
-    scope_value = "enterprise" if target == COMPANY_SCOPE else "personal"
+        if len(targets) == 1:
+            st.info("You can add documents to your own private library.", icon="🔒")
+            target = ""
+        else:
+            target = st.selectbox("Add to", targets, format_func=target_label, key="upload-target")
+        company_wide = False
+        if target:
+            company_wide = st.checkbox(
+                "Visible to all employees (company-wide)",
+                help="Otherwise only that department can see it.",
+            )
 
+    scope = "enterprise" if target else "personal"
     if st.button("Upload", type="primary", disabled=not files):
-        send_files([(f.name, f.getvalue()) for f in files], scope_value, department)
+        send_files([(f.name, f.getvalue()) for f in files], scope, target or None, company_wide)
 
-    if SAMPLE_DIR.exists() and st.button("Load the 6 sample documents"):
-        samples = [
-            (name, (SAMPLE_DIR / name).read_bytes(), dept)
-            for name, dept in ui.SAMPLE_DOCUMENTS.items()
-            if (SAMPLE_DIR / name).exists()
-        ]
-        for name, content, dept in samples:
-            send_files([(name, content)], "enterprise", dept)
+    if user["role"] == "super_admin" and SAMPLE_DIR.exists():
+        if st.button("Load the 6 sample documents"):
+            for name, (dept, wide) in ui.SAMPLE_DOCUMENTS.items():
+                if (SAMPLE_DIR / name).exists():
+                    send_files([(name, (SAMPLE_DIR / name).read_bytes())], "enterprise", dept, wide)
 
 
-def send_files(files: list[tuple[str, bytes]], scope: str, department: str | None) -> None:
+def send_files(
+    files: list[tuple[str, bytes]], scope: str, department: str | None, company_wide: bool
+) -> None:
     try:
-        results = api().upload(files, scope, department)
+        results = api().upload(files, scope, department, company_wide)
     except ApiError as error:
         st.error(ui.error_message(error))
         return
@@ -242,10 +310,14 @@ def document_list() -> None:
     except ApiUnreachable:
         st.error("Cannot reach the API. Is it running?")
         return
+    except SessionExpired:
+        session_ended()
+        return
     st.subheader(f"Library ({len(documents)})")
     if not documents:
-        st.caption("No documents yet. Upload some, or load the sample set.")
+        st.caption("No documents you can access yet.")
         return
+    user = current_user()
     for document in documents:
         label, color = ui.status_badge(document)
         with st.container(border=True):
@@ -253,7 +325,10 @@ def document_list() -> None:
             with info:
                 name = ui.escape_markdown(document.get("title") or document["original_filename"])
                 st.markdown(f"**{name}**")
-                detail = [ui.department_label(document["department"])]
+                detail = [
+                    ui.department_label(document["department"]),
+                    ui.visibility_label(document),
+                ]
                 if document.get("doc_code"):
                     detail.append(document["doc_code"])
                 detail.append(ui.human_size(document["size_bytes"]))
@@ -264,7 +339,8 @@ def document_list() -> None:
                     pages = document.get("page_count") or "-"
                     st.caption(f"{document['chunk_count']} passages · {pages} pages")
             with actions:
-                row_actions(document)
+                if ui.can_manage(user, document):
+                    row_actions(document)
 
 
 def row_actions(document: dict[str, Any]) -> None:
@@ -285,11 +361,80 @@ def row_actions(document: dict[str, Any]) -> None:
             st.rerun()
 
 
-def documents_page(scope: str) -> None:
+def documents_page() -> None:
     st.title("Documents")
-    upload_section(scope)
+    upload_section()
     st.divider()
     document_list()
+
+
+# ----------------------------------------------------------------------------- users
+
+
+def create_user_form() -> None:
+    with st.expander("➕ Add a user"), st.form("create-user", clear_on_submit=True):
+        email = st.text_input("Email")
+        full_name = st.text_input("Full name")
+        role_label = st.selectbox("Role", list(ui.ROLES.values()))
+        names = st.multiselect("Departments", list(ui.DEPARTMENTS.values()))
+        password = st.text_input(
+            "Temporary password", type="password", help="At least 12 characters."
+        )
+        if st.form_submit_button("Create user", type="primary"):
+            role = next(code for code, label in ui.ROLES.items() if label == role_label)
+            departments = [c for c, n in ui.DEPARTMENTS.items() if n in names]
+            try:
+                created = api().create_user(email, full_name, password, role, departments)
+            except ApiError as error:
+                st.error(ui.error_message(error))
+            else:
+                st.success(f"Created {created['email']}. Ask them to sign in.")
+
+
+def user_row(person: dict[str, Any], me: str) -> None:
+    with st.container(border=True):
+        info, status, actions = st.columns([5, 2, 4])
+        with info:
+            st.markdown(f"**{ui.escape_markdown(person['full_name'])}**")
+            places = ", ".join(ui.department_label(d) for d in person["departments"]) or "All"
+            st.caption(f"{person['email']} · {ui.role_label(person['role'])} · {places}")
+        with status:
+            active = person["is_active"]
+            st.badge("Active" if active else "Disabled", color="green" if active else "gray")
+        with actions:
+            if person["id"] != me:
+                action = "Disable" if person["is_active"] else "Enable"
+                if st.button(action, key=f"toggle-{person['id']}"):
+                    try:
+                        api().update_user(person["id"], is_active=not person["is_active"])
+                    except ApiError as error:
+                        st.error(ui.error_message(error))
+                    st.rerun()
+            with st.popover("Reset password"):
+                new_password = st.text_input(
+                    "New password", type="password", key=f"pw-{person['id']}"
+                )
+                if st.button("Set password", key=f"setpw-{person['id']}"):
+                    try:
+                        api().reset_password(person["id"], new_password)
+                    except ApiError as error:
+                        st.error(ui.error_message(error))
+                    else:
+                        st.success("Password changed. Their old sessions have ended.")
+
+
+def users_page() -> None:
+    st.title("Users")
+    st.caption("Super Admin only. Changes apply immediately, even to people who are signed in.")
+    create_user_form()
+    try:
+        people = api().list_users()
+    except ApiError as error:
+        st.error(ui.error_message(error))
+        return
+    me = current_user()["user_id"]
+    for person in people:
+        user_row(person, me)
 
 
 # ----------------------------------------------------------------------------- entry
@@ -297,17 +442,28 @@ def documents_page(scope: str) -> None:
 
 def main() -> None:
     st.set_page_config(page_title="Apex Knowledge Assistant", page_icon="🏭", layout="wide")
-    page, scope, department = sidebar()
     if not api().healthy():
         st.title("Apex Knowledge Assistant")
         st.error("The API is not running, so there is nothing to show yet.", icon="🔌")
+        st.caption(f"Expected at `{base_url()}`")
         st.markdown("Start it from the repository root, then reload this page:")
         st.code("scripts\\dev.ps1", language="powershell")
         st.stop()
-    if page == CHAT_PAGE:
-        chat_page(scope, department)
-    else:
-        documents_page(scope)
+
+    if not api().is_logged_in:
+        login_page()
+        st.stop()
+
+    try:
+        page, scope, department = sidebar()
+        if page == CHAT_PAGE:
+            chat_page(scope, department)
+        elif page == DOCUMENTS_PAGE:
+            documents_page()
+        else:
+            users_page()
+    except SessionExpired:
+        session_ended()
 
 
 main()

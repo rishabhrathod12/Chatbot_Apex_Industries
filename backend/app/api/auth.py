@@ -1,0 +1,74 @@
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_principal, get_login_limiter
+from app.core.config import Settings, get_settings
+from app.core.database import get_db
+from app.core.permissions import Principal
+from app.core.rate_limit import LoginLimiter
+from app.core.security import TokenError
+from app.schemas.auth import LoginRequest, PrincipalOut, RefreshRequest, TokenPair
+from app.services import auth as auth_service
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _as_http(exc: auth_service.AuthError) -> HTTPException:
+    headers = {"WWW-Authenticate": "Bearer"} if exc.status == 401 else {}
+    if exc.retry_after:
+        headers["Retry-After"] = str(exc.retry_after)
+    return HTTPException(status_code=exc.status, detail=exc.reason, headers=headers)
+
+
+@router.post("/login", response_model=TokenPair)
+def login(
+    body: LoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    limiter: LoginLimiter = Depends(get_login_limiter),
+) -> TokenPair:
+    try:
+        return auth_service.login(
+            db,
+            settings,
+            limiter,
+            email=body.email,
+            password=body.password,
+            client_address=request.client.host if request.client else "unknown",
+        )
+    except auth_service.AuthError as exc:
+        raise _as_http(exc) from exc
+    except TokenError as exc:
+        raise HTTPException(status_code=503, detail=exc.reason) from exc
+
+
+@router.post("/refresh", response_model=TokenPair)
+def refresh(
+    body: RefreshRequest,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> TokenPair:
+    try:
+        return auth_service.refresh(db, settings, body.refresh_token)
+    except auth_service.AuthError as exc:
+        raise _as_http(exc) from exc
+    except TokenError as exc:
+        raise HTTPException(status_code=503, detail=exc.reason) from exc
+
+
+@router.post("/logout", status_code=204)
+def logout(body: RefreshRequest, db: Session = Depends(get_db)) -> Response:
+    auth_service.logout(db, body.refresh_token)
+    return Response(status_code=204)
+
+
+@router.get("/me", response_model=PrincipalOut)
+def me(principal: Principal = Depends(get_current_principal)) -> PrincipalOut:
+    return PrincipalOut(
+        user_id=principal.user_id,
+        email=principal.email,
+        full_name=principal.full_name,
+        role=principal.role,
+        departments=sorted(principal.departments),
+    )

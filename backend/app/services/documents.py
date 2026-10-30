@@ -50,6 +50,7 @@ def store_upload(
     scope: str,
     owner_id: str,
     department: str,
+    visibility: str,
     settings: Settings,
 ) -> UploadResult:
     filename = sanitize_filename(upload.filename)
@@ -79,6 +80,7 @@ def store_upload(
             scope=scope,
             owner_id=owner_id,
             department=department,
+            visibility=visibility,
             dedupe_key=key,
             original_filename=filename,
             stored_filename=stored_filename,

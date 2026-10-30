@@ -14,14 +14,14 @@ DEPARTMENTS = {
     "stores": "Stores",
 }
 
-# The six fictional sample documents, and the department each belongs to.
+# The six fictional sample documents: (department, visible to all employees).
 SAMPLE_DOCUMENTS = {
-    "01_Machine_Operation_Manual.pdf": "production",
-    "02_Maintenance_Manual.pdf": "maintenance",
-    "03_Factory_Safety_Manual.pdf": "safety",
-    "04_Production_SOP.pdf": "production",
-    "05_HR_Policy.pdf": "hr",
-    "06_Quality_Control_SOP.pdf": "quality",
+    "01_Machine_Operation_Manual.pdf": ("production", False),
+    "02_Maintenance_Manual.pdf": ("maintenance", False),
+    "03_Factory_Safety_Manual.pdf": ("safety", True),
+    "04_Production_SOP.pdf": ("production", False),
+    "05_HR_Policy.pdf": ("hr", True),
+    "06_Quality_Control_SOP.pdf": ("quality", False),
 }
 
 _NO_KEY = "No OpenAI key is set. Add OPENAI_API_KEY to the .env file and restart the API."
@@ -35,6 +35,15 @@ _ERROR_TEXT = {
     "conversation_too_long": "This conversation is full. Please start a new chat.",
     "invalid_department": "That department is not recognised.",
     "too_many_files": "Too many files at once. Upload fewer files per batch.",
+    "not_allowed": "You do not have permission to do that.",
+    "invalid_credentials": "That email and password do not match an active account.",
+    "too_many_attempts": "Too many failed attempts. Please wait a few minutes and try again.",
+    "auth_not_configured": "Login is not set up. Set JWT_SECRET_KEY in .env and restart the API.",
+    "password_too_short": "That password is too short.",
+    "email_taken": "A user with that email already exists.",
+    "manager_needs_department": "A department manager needs at least one department.",
+    "cannot_demote_or_disable_self": "You cannot demote or disable your own account.",
+    "user_not_found": "That user no longer exists.",
 }
 
 _REJECT_TEXT = {
@@ -139,3 +148,48 @@ def safe_markdown(text: str) -> str:
 def escape_markdown(text: str) -> str:
     """Show text literally: for quotes copied from documents, which must not be interpreted."""
     return _MARKDOWN_SPECIAL.sub(r"\\\1", text)
+
+
+ROLES = {
+    "super_admin": "Super Admin",
+    "department_manager": "Department Manager",
+    "employee": "Employee",
+}
+
+
+def role_label(role: str) -> str:
+    return ROLES.get(role, role)
+
+
+def visibility_label(document: dict[str, Any]) -> str:
+    if document.get("scope") == "personal":
+        return "Personal"
+    return "Company-wide" if document.get("visibility") == "company" else "Department only"
+
+
+def can_manage(user: dict[str, Any], document: dict[str, Any]) -> bool:
+    """Whether to SHOW the re-index and delete buttons. Only a convenience: the server decides."""
+    if document.get("scope") == "personal":
+        return True  # the list only ever contains your own personal documents
+    if user.get("role") == "super_admin":
+        return True
+    return user.get("role") == "department_manager" and document.get("department") in user.get(
+        "departments", []
+    )
+
+
+def upload_targets(user: dict[str, Any]) -> list[str]:
+    """Which places this user may add documents to, as department codes ('' = personal)."""
+    targets = [""]
+    if user.get("role") == "super_admin":
+        return [*targets, *DEPARTMENTS]
+    if user.get("role") == "department_manager":
+        return [*targets, *user.get("departments", [])]
+    return targets
+
+
+def retry_message(error: ApiError) -> str:
+    if error.status == 429 and error.retry_after:
+        minutes = max(1, round(error.retry_after / 60))
+        return f"Too many failed attempts. Try again in about {minutes} minute(s)."
+    return error_message(error)

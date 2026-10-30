@@ -15,9 +15,15 @@ class VectorStoreError(Exception):
 class SearchFilter:
     """Restricts a search. `None` means "don't restrict on this". An empty list means "nothing
     is allowed", so it returns no results. That fails closed if a caller builds the list wrongly.
+
+    `departments` with `include_company_wide` allows chunks from those departments OR any chunk
+    marked company-wide. `narrow_department` then keeps only one department's chunks. It can
+    shrink what is allowed, never widen it.
     """
 
     departments: Sequence[str] | None = None
+    include_company_wide: bool = False
+    narrow_department: str | None = None
     owner_id: str | None = None
     document_ids: Sequence[str] | None = None
 
