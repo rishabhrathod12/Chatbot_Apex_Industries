@@ -1,0 +1,28 @@
+# Environments
+.venv/
+apex/
+.env
+.env.*
+!.env.example
+
+# Runtime data
+storage/
+chroma_db/
+*.sqlite3
+*.db
+
+# Python caches and tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
