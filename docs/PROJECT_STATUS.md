@@ -2,7 +2,7 @@
 
 **Project:** Manufacturing AI Knowledge Assistant, Apex Precision Manufacturing Pvt. Ltd.
 **Last updated:** 2026-10-30
-**Current milestone:** M0, Architecture and requirements (draft, awaiting approval)
+**Current milestone:** M2 complete locally. Next: M3 (awaiting approval)
 
 ## Milestone tracker
 
