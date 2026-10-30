@@ -9,7 +9,7 @@ Streamlit frontend  --HTTPS/JSON, JWT-->  FastAPI backend
                                            |- repositories/ (DB access)
                                            |- rag/ingestion, vectorstore, retrieval, generation
                                            |
-              PostgreSQL <-----------------+-----------------> ChromaDB
+              PostgreSQL <-----------------+-----------------> Qdrant (embedded)
               (users, documents, chunks registry,              (vectors + metadata)
                conversations, audit)
               File storage (private volume)                    OpenAI API (embeddings, LLM)
@@ -29,7 +29,7 @@ Principle: **the backend decides what a user may see.** The frontend and the LLM
 | 6 | Text extraction | `rag/ingestion/extractors/` |
 | 7 | Chunking | `rag/ingestion/chunkers/` |
 | 8 | Embedding generation | `rag/ingestion/embedder.py` |
-| 9 | Vector database | `rag/vectorstore/` (interface + Chroma impl) |
+| 9 | Vector database | `rag/vectorstore/` (interface + Qdrant impl) |
 | 10 | Retrieval engine | `rag/retrieval/` |
 | 11 | RAG orchestration | `rag/generation/orchestrator.py` |
 | 12 | LLM integration | `rag/generation/llm.py` |
@@ -48,7 +48,7 @@ Upload -> validate (extension, MIME, magic bytes, size)
  -> extract per page -> clean (strip repeated header/footer)
  -> parse metadata table (Document ID, Department, Version, Effective date)
  -> chunk (section-aware, page-tracked)
- -> embed (batched) -> upsert to Chroma (deterministic chunk IDs)
+ -> embed (batched) -> upsert to Qdrant (deterministic chunk IDs)
  -> status=ready   (any failure -> status=failed, nothing half-indexed)
 ```
 

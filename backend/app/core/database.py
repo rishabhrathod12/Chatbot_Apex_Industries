@@ -25,3 +25,8 @@ def get_db(settings: Settings = Depends(get_settings)) -> Iterator[Session]:
     factory = sessionmaker(bind=get_engine(settings.database_url), expire_on_commit=False)
     with factory() as session:
         yield session
+
+
+def get_session_factory(database_url: str) -> sessionmaker[Session]:
+    """For code that runs outside a request (background ingestion)."""
+    return sessionmaker(bind=get_engine(database_url), expire_on_commit=False)

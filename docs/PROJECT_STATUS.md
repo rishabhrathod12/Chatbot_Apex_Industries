@@ -2,7 +2,7 @@
 
 **Project:** Manufacturing AI Knowledge Assistant, Apex Precision Manufacturing Pvt. Ltd.
 **Last updated:** 2026-10-30
-**Current milestone:** M5 complete locally. Next: M6 (awaiting approval)
+**Current milestone:** M6 complete locally. Next: M7 (awaiting approval)
 
 ## Milestone tracker
 
@@ -14,7 +14,7 @@
 | M3 | Document upload and storage (+ SQLAlchemy/Alembic) | Done locally 2026-10-31 (committed, not pushed) |
 | M4 | PDF/DOCX/TXT extraction and preprocessing | Done locally 2026-10-31 (committed, not pushed) |
 | M5 | Chunking and metadata management | Done locally 2026-10-31 (committed, not pushed) |
-| M6 | Embeddings and ChromaDB integration | Not started |
+| M6 | Embeddings and vector store integration (Qdrant, see ADR-0005) | Done locally 2026-10-31 (committed, not pushed) |
 | M7 | Basic RAG + first golden set | Not started |
 | M8 | Citations and conversational memory | Not started |
 | M9 | Streamlit frontend | Not started |

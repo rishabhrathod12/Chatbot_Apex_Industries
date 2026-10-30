@@ -25,10 +25,18 @@ alembic upgrade head        # creates storage/app.db (SQLite) by default
 uvicorn app.main:app --reload
 ```
 
+## Embeddings
+
+Set `OPENAI_API_KEY` in `.env` to embed with OpenAI (`text-embedding-3-small`). To run fully offline
+without a key, set `EMBEDDING_PROVIDER=hashing` (development only, no real semantic search).
+Without either, uploads succeed but the document is marked `failed: embedding_not_configured`;
+fix the setting and call `POST /api/v1/documents/{id}/reindex`.
+
 ## Quality checks
 
 ```powershell
 ruff check .
 mypy
-pytest
+pytest                      # offline, no API key needed
+pytest -m live              # optional: calls the real OpenAI API (needs OPENAI_API_KEY)
 ```

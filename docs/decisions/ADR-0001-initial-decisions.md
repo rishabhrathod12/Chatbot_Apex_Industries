@@ -43,3 +43,15 @@ Status: **Approved D1-D9 and ADR-0002 reordering** (user replied "yes", 2026-10-
 ## ADR-0004: Own section-aware splitter instead of LangChain's (M5, 2026-10-31)
 
 D2 said to use LangChain's text splitters. A generic splitter works on one flat string and loses which page each part came from, and page numbers are a core requirement (citations). `SectionChunker` packs paragraph/bullet units that each carry their page, so a chunk's `page_start`/`page_end` are exact. It is about 150 lines, deterministic, and fully tested. LangChain stays in use only where it helps (OpenAI wrappers at M6/M7). Chunk size is estimated at 4 characters per token. Swap in a real tokenizer if sizing ever matters.
+
+## ADR-0005: Qdrant (embedded) replaces ChromaDB (M6, 2026-10-31)
+
+ChromaDB crashed the Python process (access violation on the first `upsert`) on the dev machine in every version tried that installs from a wheel (1.0.21, 1.1.1, 1.3.7, 1.5.9), in memory and on disk, at any vector size. The 0.x line needs a C++ compiler to build `chroma-hnswlib`, which isn't installed. Qdrant's embedded mode (`qdrant-client`, pure Python) passed the same smoke test: 1536-dim vectors, filters, delete-by-filter, persistence. The user approved the switch.
+
+This is the swap D3 was designed for: only `rag/vectorstore/qdrant_store.py` changed. Two collections (D6) are unchanged.
+
+Consequences: embedded Qdrant allows one process per storage folder, so the API runs as a single process for now (several workers would need a Qdrant server). Payload indexes are skipped in embedded mode.
+
+## ADR-0006: Offline hashing embedder (M6, 2026-10-31)
+
+`HashingEmbedder` (word hashing, no semantics) lets the full pipeline run and be tested without an API key or network. It is blocked in production by a settings check. Its retrieval results are a plumbing baseline only. On the 16 golden questions it puts the right document in the top 3 for 14. The other 2 are marked `xfail(strict)`. Real retrieval quality is measured with the OpenAI embedder at M7.

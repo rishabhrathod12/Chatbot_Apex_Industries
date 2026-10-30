@@ -7,7 +7,7 @@ apex/
 
 # Runtime data
 storage/
-chroma_db/
+vector_db/
 *.sqlite3
 *.db
 

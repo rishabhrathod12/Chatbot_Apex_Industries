@@ -14,6 +14,11 @@ class DocumentOut(BaseModel):
     file_ext: str
     size_bytes: int
     status: str
+    status_reason: str | None = None
+    chunk_count: int = 0
+    page_count: int | None = None
+    doc_code: str | None = None
+    title: str | None = None
     created_at: datetime
 
 
