@@ -9,8 +9,8 @@
 | # | Milestone | Status |
 |---|---|---|
 | M0 | Architecture and requirements | Approved 2026-10-30 (pending questions remain, none block M1 given defaults) |
-| M1 | Project foundation and repo setup | Not started |
-| M2 | Backend foundation and configuration | Not started |
+| M1 | Project foundation and repo setup | Done locally 2026-10-30 (commit e7e6d33, not pushed) |
+| M2 | Backend foundation and configuration | Done locally 2026-10-30 (committed, not pushed) |
 | M3 | Document upload and storage (+ SQLAlchemy/Alembic, see ADR-0002) | Not started |
 | M4 | PDF/DOCX/TXT extraction and preprocessing | Not started |
 | M5 | Chunking and metadata management | Not started |
