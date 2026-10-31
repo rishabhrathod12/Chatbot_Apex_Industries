@@ -76,3 +76,4 @@ See `docs/decisions/ADR-0001-initial-decisions.md`, section "Pending".
 - 2026-10-31: M13 run for real (first RAGAS baseline).
 - 2026-10-31: authentication and interface redesign, phases 1 to 8, pushed. Phase 9 (authorization sweep, documents) pushed too.
 - 2026-10-31: repository cleanup on branch `cleanup/structure` (phases 0 to 2): dead code removed, shared model helpers, the 14 security test files moved to `backend/tests/security/`. Behaviour unchanged; same 1168 tests pass.
+- 2026-10-31: `docs/data-model.md` and `docs/architecture.md` rewritten to match the code and migration 0008 (they still described the original M0 design).

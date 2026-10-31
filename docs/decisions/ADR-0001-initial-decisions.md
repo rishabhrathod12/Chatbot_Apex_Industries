@@ -14,7 +14,7 @@ Status: **Approved D1-D9 and ADR-0002 reordering** (user replied "yes", 2026-10-
 | D6 | Two Chroma collections: `enterprise_chunks`, `personal_chunks`. Department filtering by metadata inside enterprise | Personal and company data have different owners and lifecycles |
 | D7 | Fake embedder and fake LLM in normal tests. Live API tests are opt-in | Free, offline, deterministic test suite |
 | D8 | PDF citations use page numbers. DOCX/TXT citations use section headings | DOCX/TXT have no real pages |
-| D9 | Strip repeated header/footer, drop or tag disclaimer and revision-history blocks | See architecture.md section 5 |
+| D9 | Strip repeated header/footer, drop or tag disclaimer and revision-history blocks | See architecture.md section 10 |
 
 ## ADR-0002 (proposed): Milestone order changes
 
