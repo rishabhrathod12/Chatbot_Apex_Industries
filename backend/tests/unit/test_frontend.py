@@ -412,6 +412,7 @@ class FakeApi:
         )
         self.asked: list[tuple[Any, ...]] = []
         self.login_attempts: list[tuple[str, str]] = []
+        self.login_portals: list[str | None] = []
         self.login_error: ApiError | None = None
         self.chat_error: ApiError | None = None
         self.logged_out = False
@@ -431,8 +432,9 @@ class FakeApi:
     def healthy(self) -> bool:
         return self._healthy
 
-    def login(self, email: str, password: str) -> dict[str, Any]:
+    def login(self, email: str, password: str, portal: str | None = None) -> dict[str, Any]:
         self.login_attempts.append((email, password))
+        self.login_portals.append(portal)
         if self.login_error:
             raise self.login_error
         self.user, self.is_logged_in = EMPLOYEE, True
@@ -533,56 +535,116 @@ def _all_text(app: AppTest) -> str:
 # ---- signing in ----
 
 
-def test_signed_out_visitors_see_only_the_sign_in_form(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _run(monkeypatch, FakeApi(user=None))
-    assert not app.exception
-    assert [t.label for t in app.text_input] == ["Login ID or email", "Password"]
-    assert not app.chat_input
-    assert not app.sidebar.radio  # no navigation before signing in
-    assert "no self sign-up" in _all_text(app)
+def _at_portal(monkeypatch: pytest.MonkeyPatch, fake: FakeApi, portal: str = "employee") -> AppTest:
+    app = _app(monkeypatch, fake)
+    app.session_state["portal"] = portal
+    return app.run()
 
 
-def test_signing_in_with_the_form_logs_in_and_shows_the_app(
+def test_signed_out_visitors_first_see_the_two_sign_in_options(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    app = _run(monkeypatch, FakeApi(user=None))
+    assert not app.exception
+    assert not app.text_input  # nothing to type until a portal is chosen
+    assert [b.label for b in app.button] == ["Continue as employee", "Continue as Super Admin"]
+    assert not app.chat_input and not app.sidebar.radio  # no navigation before signing in
+    text = _all_text(app)
+    assert "Apex Precision Manufacturing" in text and "no self sign-up" in text
+
+
+@pytest.mark.parametrize(
+    ("button", "portal", "heading"),
+    [(0, "employee", "Employee Login"), (1, "admin", "Super Admin Login")],
+)
+def test_each_card_opens_its_own_sign_in_screen(
+    monkeypatch: pytest.MonkeyPatch, button: int, portal: str, heading: str
+) -> None:
+    app = _run(monkeypatch, FakeApi(user=None))
+    app.button[button].click().run()
+    assert app.session_state["portal"] == portal
+    assert [t.label for t in app.text_input] == ["Login ID", "Password"]
+    assert any(heading in m.value for m in app.markdown)
+    assert any("Back to the sign-in options" in b.label for b in app.button)
+
+
+def test_a_bookmarked_portal_link_opens_that_sign_in_screen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _app(monkeypatch, FakeApi(user=None))
+    app.query_params["portal"] = "admin"
+    app.run()
+    assert any("Super Admin Login" in m.value for m in app.markdown)
+    app = _app(monkeypatch, FakeApi(user=None))
+    app.query_params["portal"] = "root"  # not a portal: ignored, landing page instead
+    app.run()
+    assert [b.label for b in app.button] == ["Continue as employee", "Continue as Super Admin"]
+
+
+def test_back_returns_to_the_two_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _at_portal(monkeypatch, FakeApi(user=None), "admin")
+    next(b for b in app.button if b.label.startswith("\u2190")).click().run()
+    assert "portal" not in app.session_state
+    assert [b.label for b in app.button] == ["Continue as employee", "Continue as Super Admin"]
+
+
+@pytest.mark.parametrize("portal", ["employee", "admin"])
+def test_signing_in_sends_the_chosen_portal_and_shows_the_app(
+    monkeypatch: pytest.MonkeyPatch, portal: str
+) -> None:
     fake = FakeApi(user=None, conversations=False)
-    app = _run(monkeypatch, fake)
-    app.text_input[0].set_value("esha@apex.test")
+    app = _at_portal(monkeypatch, fake, portal)
+    app.text_input[0].set_value("esha")
     app.text_input[1].set_value("a-long-password-1")
     app.button[0].click().run()
-    assert fake.login_attempts == [("esha@apex.test", "a-long-password-1")]
+    assert fake.login_attempts == [("esha", "a-long-password-1")]
+    assert fake.login_portals == [portal]
     assert app.title[0].value == "Ask the documents"
 
 
-def test_a_failed_sign_in_shows_a_plain_message_and_stays_on_the_form(
+def test_a_failed_sign_in_shows_a_plain_message_that_names_the_portal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake = FakeApi(user=None)
     fake.login_error = ApiError(401, "invalid_credentials")
-    app = _run(monkeypatch, fake)
-    app.text_input[0].set_value("x@apex.test")
+    app = _at_portal(monkeypatch, fake, "admin")
+    app.text_input[0].set_value("x")
     app.text_input[1].set_value("wrong")
     app.button[0].click().run()
-    assert any("do not match" in e.value for e in app.error)
+    assert any("active Super Admin account" in e.value for e in app.error)
     assert not app.chat_input
+    assert [t.label for t in app.text_input] == ["Login ID", "Password"]  # still on the form
 
 
 def test_a_lockout_tells_the_user_how_long_to_wait(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeApi(user=None)
     fake.login_error = ApiError(429, "too_many_attempts", retry_after=840)
-    app = _run(monkeypatch, fake)
-    app.text_input[0].set_value("x@apex.test")
+    app = _at_portal(monkeypatch, fake)
+    app.text_input[0].set_value("x")
     app.text_input[1].set_value("wrong")
     app.button[0].click().run()
     assert any("14 minute" in e.value for e in app.error)
 
 
-def test_signing_out_returns_to_the_sign_in_form(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_ended_session_explains_itself_on_the_same_portals_sign_in_screen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _at_portal(monkeypatch, FakeApi(user=None), "admin")
+    app.session_state["notice"] = "Your session ended. Please sign in again."
+    app.run()
+    assert any("session ended" in i.value for i in app.info)
+    assert any("Super Admin Login" in m.value for m in app.markdown)
+
+
+def test_signing_out_returns_to_the_two_options(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeApi(user=EMPLOYEE)
-    app = _run(monkeypatch, fake)
+    app = _app(monkeypatch, fake)
+    app.session_state["portal"] = "employee"
+    app.run()
     next(b for b in app.sidebar.button if b.label == "Sign out").click().run()
     assert fake.logged_out
-    assert [t.label for t in app.text_input] == ["Login ID or email", "Password"]
+    assert "portal" not in app.session_state
+    assert [b.label for b in app.button] == ["Continue as employee", "Continue as Super Admin"]
 
 
 def test_the_sidebar_shows_who_is_signed_in(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -823,6 +885,7 @@ def test_creating_the_first_account_signs_the_person_in(monkeypatch: pytest.Monk
     app.button[0].click().run()
     assert fake.setup_calls == [("boss@apex.test", "The Boss", "a-long-password-1", "")]
     assert fake.login_attempts == [("boss@apex.test", "a-long-password-1")]
+    assert fake.login_portals == ["admin"]  # the first account is a Super Admin
     assert app.title[0].value == "Ask the documents"
 
 
@@ -866,11 +929,12 @@ def test_when_setup_is_switched_off_the_page_explains_the_command_line_way(
     assert "create-user" in app.code[0].value
 
 
-def test_once_an_account_exists_the_normal_sign_in_form_returns(
+def test_once_an_account_exists_the_sign_in_options_return(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = _run(monkeypatch, FakeApi(user=None))  # setup_required is False by default
-    assert [t.label for t in app.text_input] == ["Login ID or email", "Password"]
+    assert not any("First-time setup" in s.value for s in app.subheader)
+    assert [b.label for b in app.button] == ["Continue as employee", "Continue as Super Admin"]
 
 
 # ---- temporary passwords ----

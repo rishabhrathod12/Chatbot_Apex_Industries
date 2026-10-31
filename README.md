@@ -41,7 +41,10 @@ One command starts the API and the web interface and opens the browser:
 .\scripts\dev.ps1          # web interface http://localhost:8501, API docs http://localhost:8000/docs
 ```
 
-Sign in, then (as a Super Admin) open **Documents**, click *Load the 6 sample documents*, wait for each to show **Ready**, and
+The first page offers two sign-in options, **Employee Login** and **Super Admin Login** (a bookmark such as
+`http://localhost:8501/?portal=admin` opens one directly). Both ask for a Login ID (an email works too) and a password. The
+choice is only a convenience: the server checks the account's real role and refuses an account that belongs to the other
+portal. Someone given a temporary password is asked to choose their own before anything else. Sign in, then (as a Super Admin) open **Documents**, click *Load the 6 sample documents*, wait for each to show **Ready**, and
 go to **Chat**. What each person can see depends on their role and departments (see `docs/security.md`). Only one API process can use the vector folder at a time, so close an old API
 window before starting another. Set `API_BASE_URL` if the API runs somewhere else.
 
