@@ -27,7 +27,7 @@ written.
 _TAG = re.compile(r"</?\s*context\s*>", re.IGNORECASE)
 
 
-def _defang(text: str) -> str:
+def defang(text: str) -> str:
     """Stop text from closing or opening the <context> block that wraps the excerpts."""
     return _TAG.sub("[context]", text)
 
@@ -47,10 +47,10 @@ def _label(hit: SearchHit) -> str:
 
 def build_messages(question: str, hits: Sequence[SearchHit]) -> list[ChatMessage]:
     excerpts = "\n\n".join(
-        f"[{number}] {_defang(_label(hit))}\n{_defang(hit.text)}"
+        f"[{number}] {defang(_label(hit))}\n{defang(hit.text)}"
         for number, hit in enumerate(hits, start=1)
     )
-    user = f"<context>\n{excerpts}\n</context>\n\nQuestion: {_defang(question.strip())}"
+    user = f"<context>\n{excerpts}\n</context>\n\nQuestion: {defang(question.strip())}"
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user},

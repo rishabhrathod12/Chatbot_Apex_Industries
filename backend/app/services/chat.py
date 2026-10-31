@@ -62,6 +62,12 @@ def chat(
         search_filter=search_filter,
         top_k=settings.retrieval_top_k,
         min_score=settings.retrieval_min_score,
+        retrieval_mode=settings.retrieval_mode,
+        candidates=settings.retrieval_candidates,
+        max_scan=settings.lexical_max_chunks,
+        use_rerank=settings.rerank_enabled,
+        rerank_top_n=settings.rerank_top_n,
+        rerank_min_relevance=settings.rerank_min_relevance,
     )
 
     if conversation is None:

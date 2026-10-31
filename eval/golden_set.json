@@ -1,5 +1,5 @@
 {
-  "note": "Derived from docs/golden-questions-draft.md. Expected pages are PDF page numbers. Types: answerable / multi_document / exact_id have expected sources. unanswerable (nothing in the documents): the right outcome is a refusal. not_specified (the documents explicitly say they do not give the value): a refusal or a grounded statement that it is not specified is acceptable, answers are flagged for manual review. Follow-ups (two-turn conversations) are listed separately. Permission and injection cases arrive with M11.",
+  "note": "Derived from docs/golden-questions-draft.md. Expected pages are PDF page numbers. Types: answerable / multi_document / exact_id have expected sources. unanswerable (nothing in the documents): the right outcome is a refusal. not_specified (the documents explicitly say they do not give the value): a refusal or a grounded statement that it is not specified is acceptable, answers are flagged for manual review. Cases with a tag (keyword, paraphrase, near_miss) were added in M12 to be harder. Follow-ups (two-turn conversations) are listed separately. Permission and injection cases arrive with M11.",
   "cases": [
     {
       "id": "A01",
@@ -263,6 +263,519 @@
       "id": "D06",
       "type": "unanswerable",
       "question": "What is the goods receipt procedure of the Stores department?",
+      "expected": []
+    },
+    {
+      "id": "K01",
+      "type": "answerable",
+      "tag": "keyword",
+      "question": "What does SDS stand for and when must I read it?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "K02",
+      "type": "answerable",
+      "tag": "keyword",
+      "question": "Which WIP and pending approvals go in the shift handover?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "K03",
+      "type": "answerable",
+      "tag": "keyword",
+      "question": "What is the first-off inspection record for?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "K04",
+      "type": "answerable",
+      "tag": "keyword",
+      "question": "Which gauge ID and lot reference go in the in-process inspection log?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "K05",
+      "type": "answerable",
+      "tag": "keyword",
+      "question": "Where is the heat number recorded?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "K06",
+      "type": "answerable",
+      "tag": "keyword",
+      "question": "Are light curtains allowed to be bypassed?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "K07",
+      "type": "answerable",
+      "tag": "keyword",
+      "question": "Who approves a concession?",
+      "expected": [
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "K08",
+      "type": "answerable",
+      "tag": "keyword",
+      "question": "What is the job traveler used for?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "K09",
+      "type": "answerable",
+      "tag": "keyword",
+      "question": "Can I use an instrument that is overdue for calibration?",
+      "expected": [
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "K10",
+      "type": "answerable",
+      "tag": "keyword",
+      "question": "Do I apply my own lock and tag before servicing?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "P01",
+      "type": "answerable",
+      "tag": "paraphrase",
+      "question": "Can I run a machine if its safety door sensor has been disabled?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        },
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "P02",
+      "type": "answerable",
+      "tag": "paraphrase",
+      "question": "A colleague got a small cut. Do I still need to tell someone?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "P03",
+      "type": "answerable",
+      "tag": "paraphrase",
+      "question": "I clocked in wrongly yesterday, how do I get it fixed?",
+      "expected": [
+        {
+          "doc_code": "APM-HR-POL-005",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "P04",
+      "type": "answerable",
+      "tag": "paraphrase",
+      "question": "Who decides whether rejected parts get scrapped?",
+      "expected": [
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        },
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "P05",
+      "type": "answerable",
+      "tag": "paraphrase",
+      "question": "There is fluid dripping from the machine. Should I carry on working?",
+      "expected": [
+        {
+          "doc_code": "APM-MNT-MAN-002",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "P06",
+      "type": "answerable",
+      "tag": "paraphrase",
+      "question": "Who tells me how long my shift is?",
+      "expected": [
+        {
+          "doc_code": "APM-HR-POL-005",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "P07",
+      "type": "answerable",
+      "tag": "paraphrase",
+      "question": "What if the drawing does not match the material I was given?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "P08",
+      "type": "answerable",
+      "tag": "paraphrase",
+      "question": "What should I do if I find stock with no label?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        },
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "N01",
+      "type": "not_specified",
+      "tag": "near_miss",
+      "question": "How often must gauges be calibrated?",
+      "expected": []
+    },
+    {
+      "id": "N02",
+      "type": "not_specified",
+      "tag": "near_miss",
+      "question": "What PPE do I need for welding?",
+      "expected": []
+    },
+    {
+      "id": "N03",
+      "type": "not_specified",
+      "tag": "near_miss",
+      "question": "How do I apply for maternity leave?",
+      "expected": []
+    },
+    {
+      "id": "N04",
+      "type": "unanswerable",
+      "tag": "near_miss",
+      "question": "What is the overtime pay rate?",
+      "expected": []
+    },
+    {
+      "id": "N05",
+      "type": "unanswerable",
+      "tag": "near_miss",
+      "question": "Who is the head of the Quality department?",
+      "expected": []
+    },
+    {
+      "id": "H01",
+      "type": "answerable",
+      "tag": "heldout",
+      "question": "What does the operator need to do before running the first batch part?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        },
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "H02",
+      "type": "answerable",
+      "tag": "heldout",
+      "question": "Am I allowed to restart a machine that keeps alarming so we do not lose output?",
+      "expected": [
+        {
+          "doc_code": "APM-MNT-MAN-002",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "H03",
+      "type": "answerable",
+      "tag": "heldout",
+      "question": "What happens to the paperwork when a shift ends?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        },
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "H04",
+      "type": "answerable",
+      "tag": "heldout",
+      "question": "If I am off sick, who do I tell?",
+      "expected": [
+        {
+          "doc_code": "APM-HR-POL-005",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "H05",
+      "type": "answerable",
+      "tag": "heldout",
+      "question": "What should happen to a chemical spill I cannot handle myself?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "H06",
+      "type": "answerable",
+      "tag": "heldout",
+      "question": "Who is allowed to give the go-ahead to ship finished goods?",
+      "expected": [
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "H07",
+      "type": "answerable",
+      "tag": "heldout",
+      "question": "Can I improvise a clamp if the right fixture is missing?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "H08",
+      "type": "answerable",
+      "tag": "heldout",
+      "question": "How should numeric measurements be written down during inspection?",
+      "expected": [
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        },
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "H09",
+      "type": "unanswerable",
+      "tag": "heldout",
+      "question": "What is on the cafeteria menu today?",
+      "expected": []
+    },
+    {
+      "id": "H10",
+      "type": "not_specified",
+      "tag": "heldout",
+      "question": "What is the speed limit for forklifts on site?",
+      "expected": []
+    },
+    {
+      "id": "H11",
+      "type": "unanswerable",
+      "tag": "heldout",
+      "question": "How do I claim travel expenses?",
+      "expected": []
+    },
+    {
+      "id": "J01",
+      "type": "answerable",
+      "tag": "heldout2",
+      "question": "What must I wear when working near spinning equipment?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "J02",
+      "type": "answerable",
+      "tag": "heldout2",
+      "question": "Do I need to log scrap and downtime?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-MAN-001",
+          "page": 2
+        },
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "J03",
+      "type": "answerable",
+      "tag": "heldout2",
+      "question": "Can someone else clock me in if I am running late?",
+      "expected": [
+        {
+          "doc_code": "APM-HR-POL-005",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "J04",
+      "type": "answerable",
+      "tag": "heldout2",
+      "question": "Where do I mark equipment that must not be used until it is repaired?",
+      "expected": [
+        {
+          "doc_code": "APM-MNT-MAN-002",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "J05",
+      "type": "answerable",
+      "tag": "heldout2",
+      "question": "What proof is needed that a measuring tool can be trusted?",
+      "expected": [
+        {
+          "doc_code": "APM-QLT-SOP-006",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "J06",
+      "type": "answerable",
+      "tag": "heldout2",
+      "question": "When can I go back to using a machine after maintenance?",
+      "expected": [
+        {
+          "doc_code": "APM-MNT-MAN-002",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "J07",
+      "type": "answerable",
+      "tag": "heldout2",
+      "question": "Who checks that the right revision of the drawing is at my workstation?",
+      "expected": [
+        {
+          "doc_code": "APM-PROD-SOP-004",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "J08",
+      "type": "answerable",
+      "tag": "heldout2",
+      "question": "How do near misses get reported if nobody was hurt?",
+      "expected": [
+        {
+          "doc_code": "APM-HSE-MAN-003",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "id": "J09",
+      "type": "unanswerable",
+      "tag": "heldout2",
+      "question": "What is the dress code for visitors?",
+      "expected": []
+    },
+    {
+      "id": "J10",
+      "type": "not_specified",
+      "tag": "heldout2",
+      "question": "What is the maximum weight a forklift can carry?",
+      "expected": []
+    },
+    {
+      "id": "J11",
+      "type": "unanswerable",
+      "tag": "heldout2",
+      "question": "When is the next company holiday?",
       "expected": []
     }
   ],

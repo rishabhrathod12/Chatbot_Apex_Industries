@@ -61,12 +61,21 @@ without a key, set `EMBEDDING_PROVIDER=hashing` (development only, no real seman
 Without either, uploads succeed but the document is marked `failed: embedding_not_configured`;
 fix the setting and call `POST /api/v1/documents/{id}/reindex`.
 
+## How answers are found
+
+Each question is searched two ways, by meaning and by keywords (exact words, ids, acronyms), and the
+results are merged. A second check then scores each candidate passage on whether it actually
+*answers* the question, and drops the ones that are only related. Both steps only ever see documents
+the person is allowed to read. They can be switched off with `RETRIEVAL_MODE=semantic` and
+`RERANK_ENABLED=false` (then set `RETRIEVAL_MIN_SCORE` back to about 0.40). Details and measurements:
+`docs/retrieval-baseline.md`.
+
 ## Asking questions and measuring retrieval
 
 `POST /api/v1/chat` with `{"question": "..."}` returns an answer, its sources (document, section, page,
 and a verbatim quote) or a "not found" result, plus a `conversation_id`. Send that id back to ask a
 follow-up. `GET /api/v1/conversations` lists your conversations. It needs `OPENAI_API_KEY` (embeddings and chat). Retrieval quality on the
-sample documents: `python -m eval.run --provider openai` (see `docs/retrieval-baseline.md`).
+sample documents: `python -m eval.run --provider openai --mode both`; compare answer settings with `python -m eval.compare` (see `docs/retrieval-baseline.md`).
 
 ## Quality checks
 

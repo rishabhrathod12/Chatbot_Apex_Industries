@@ -3,11 +3,11 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from qdrant_client import QdrantClient, models
 
-from app.rag.vectorstore.base import SearchFilter, SearchHit, VectorStoreError
+from app.rag.vectorstore.base import SearchFilter, SearchHit, StoredChunk, VectorStoreError
 from app.schemas.chunk import Chunk
 
 _NAMESPACE = uuid.UUID("5f0c1c0e-6b0e-4d6e-9a53-2a7d1d6a0a11")
@@ -189,6 +189,48 @@ class QdrantVectorStore:
                 )
             )
         return hits
+
+    def scan(self, search_filter: SearchFilter | None, limit: int) -> list[StoredChunk]:
+        if limit <= 0 or _blocks_everything(search_filter):
+            return []
+        found: list[StoredChunk] = []
+        offset = None
+        while len(found) < limit:
+            with self._handle.lock:
+                points, offset = self._handle.client.scroll(
+                    self._name,
+                    scroll_filter=_to_qdrant_filter(search_filter),
+                    limit=min(256, limit - len(found)),
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+            for point in points:
+                payload = dict(point.payload or {})
+                text = str(payload.pop(_TEXT_KEY, ""))
+                found.append(StoredChunk(str(payload.get("chunk_id", "")), text, payload))
+            if offset is None:
+                break
+        return found
+
+    def vectors_for(self, chunk_ids: Sequence[str]) -> dict[str, list[float]]:
+        if not chunk_ids:
+            return {}
+        with self._handle.lock:
+            points = self._handle.client.retrieve(
+                self._name,
+                ids=[point_id(c) for c in chunk_ids],
+                with_payload=["chunk_id"],
+                with_vectors=True,
+            )
+        vectors: dict[str, list[float]] = {}
+        for point in points:
+            # A collection with one unnamed vector per point returns a flat list of numbers.
+            if isinstance(point.vector, list) and point.payload:
+                vectors[str(point.payload["chunk_id"])] = [
+                    float(x) for x in cast(list[float], point.vector)
+                ]
+        return vectors
 
     def _document_condition(self, document_id: str) -> models.FieldCondition:
         return models.FieldCondition(key="document_id", match=models.MatchValue(value=document_id))

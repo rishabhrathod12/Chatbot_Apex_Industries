@@ -2,7 +2,7 @@
 
 **Project:** Manufacturing AI Knowledge Assistant, Apex Precision Manufacturing Pvt. Ltd.
 **Last updated:** 2026-10-30
-**Current milestone:** M11 complete (login, roles, department permissions). M10 (Postgres) was skipped on purpose and is still open. Next: M10 or M12 (awaiting approval)
+**Current milestone:** M12 complete (hybrid search + reranking, defaults set from measurement). M10 (Postgres) is still open. Next: M13 (RAGAS) or M10 (awaiting approval)
 
 ## Milestone tracker
 
@@ -20,7 +20,7 @@
 | M9 | Streamlit frontend | First version done 2026-10-31 (chat, sources, conversations, documents). Not yet: login (M11), polish for phones, accessibility review |
 | M10 | PostgreSQL and enterprise document management | Not started |
 | M11 | Authentication, RBAC, department permissions | Done locally 2026-10-31. Security report: docs/security-test-report.md |
-| M12 | Hybrid search and reranking | Not started |
+| M12 | Hybrid search and reranking | Done locally 2026-10-31. Measured against M7: see docs/retrieval-baseline.md section 6 |
 | M13 | RAGAS evaluation | Not started |
 | M14 | Docker, deployment, monitoring, hardening | Not started |
 

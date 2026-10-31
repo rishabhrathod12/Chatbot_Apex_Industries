@@ -93,6 +93,28 @@ def test_golden_set_is_well_formed() -> None:
             assert case.expected == (), case.id
 
 
+def test_the_m12_questions_are_tagged_and_the_held_out_batches_are_kept_apart() -> None:
+    cases = load_golden()
+    by_tag: dict[str, int] = {}
+    for case in cases:
+        by_tag[case.tag] = by_tag.get(case.tag, 0) + 1
+    assert by_tag == {
+        "": 26,
+        "keyword": 10,
+        "paraphrase": 8,
+        "near_miss": 5,
+        "heldout": 11,
+        "heldout2": 11,
+    }
+    assert len(cases) == 71
+    # every kind of question has both something to find and something that must be refused
+    near = [c for c in cases if c.tag == "near_miss"]
+    assert {c.type for c in near} == {"not_specified", "unanswerable"}
+    for tag in ("heldout", "heldout2"):
+        kinds = {c.type for c in cases if c.tag == tag}
+        assert "answerable" in kinds and "unanswerable" in kinds
+
+
 def test_golden_set_only_points_at_documents_that_exist() -> None:
     real_codes = {extract(pdf, ".pdf").metadata.doc_code for pdf in SAMPLE_DOCS.glob("*.pdf")}
     expected_codes = {e.doc_code for c in load_golden() for e in c.expected}
@@ -126,9 +148,10 @@ def test_load_golden_reads_a_custom_file(tmp_path: Path) -> None:
 def test_offline_baseline_has_not_regressed(indexed_samples: IndexedSamples) -> None:
     """Plumbing baseline with the word-matching embedder (measured 2026-10-31: doc hit@5 = 0.95,
     mrr = 0.85, one miss). It guards against pipeline breakage, not retrieval quality."""
-    report = evaluate_retrieval(
-        load_golden(), indexed_samples.embedder, indexed_samples.store, top_k=5
-    )
+    original = [
+        c for c in load_golden() if not c.tag
+    ]  # the harder M12 questions need real embeddings
+    report = evaluate_retrieval(original, indexed_samples.embedder, indexed_samples.store, top_k=5)
     assert report.by_document["n"] == 20
     assert report.by_document["hit@5"] >= 0.90
     assert report.by_document["mrr"] >= 0.80
@@ -169,6 +192,7 @@ def _result(
         case_id,
         kind,
         "q",
+        "",
         status,
         None if status == "answered" else "model_declined",
         "a",

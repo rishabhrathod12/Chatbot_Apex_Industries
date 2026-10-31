@@ -32,6 +32,7 @@ All of these rules live in one module, `backend/app/core/permissions.py`. Nothin
 | Threat | Control | Tested in |
 |---|---|---|
 | Reading another department's documents through search | One function builds the search filter from the logged-in user (`build_search_filter`). It is applied inside the vector search, so forbidden chunks are never retrieved | `test_access_control_matrix.py`, `test_vectorstore_visibility.py` |
+| Keyword search or reranking becoming a side door | Keyword search scans only the chunks the user's filter allows, so even its word statistics come from permitted text. The reranker only sees chunks that passed the filter and can only drop or reorder them. The matrix is re-run in both modes and inspects every prompt sent to either model | `test_access_control_hybrid.py`, `test_hybrid_retrieval.py` |
 | Forbidden text reaching the language model | The model only receives chunks the filter allowed. Tests capture every prompt sent and check no forbidden document appears | `test_access_control_matrix.py` |
 | Probing for document or conversation ids | Anything you may not read returns 404, identical to "does not exist" | matrix and `test_access_control_more.py` |
 | A user changing documents they should not | Reading and changing are checked separately: 404 if you cannot see it, 403 if you can see it but not change it | matrix, `test_access_control_more.py` |

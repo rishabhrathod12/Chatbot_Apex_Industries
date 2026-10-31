@@ -1,10 +1,11 @@
 """Run the golden set against a store and compute retrieval metrics."""
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from app.rag.generation import ChatModel, HistoryTurn, answer_question, condense_question
 from app.rag.ingestion.embedder import Embedder
-from app.rag.retrieval import semantic_search
+from app.rag.retrieval import RetrievalMode, retrieve
 from app.rag.vectorstore import VectorStore
 from eval.metrics import Case, Followup, RetrievedChunk, first_hit_rank, score_spread, summarize
 
@@ -15,6 +16,7 @@ class RetrievalReport:
     by_page: dict[str, float]
     score_spread: dict[str, float]
     misses: list[str] = field(default_factory=list)  # ids of answerable cases not found in top-k
+    by_tag: dict[str, dict[str, float]] = field(default_factory=dict)  # per kind of question
 
 
 def _page(value: object) -> int | None:
@@ -22,9 +24,14 @@ def _page(value: object) -> int | None:
 
 
 def _retrieved(
-    embedder: Embedder, store: VectorStore, case: Case, top_k: int
+    embedder: Embedder,
+    store: VectorStore,
+    case: Case,
+    top_k: int,
+    mode: RetrievalMode,
+    candidates: int,
 ) -> list[RetrievedChunk]:
-    hits = semantic_search(embedder, store, case.question, top_k=top_k)
+    hits = retrieve(embedder, store, case.question, top_k=top_k, mode=mode, candidates=candidates)
     return [
         RetrievedChunk(
             doc_code=str(h.metadata.get("doc_code", "")),
@@ -37,16 +44,22 @@ def _retrieved(
 
 
 def evaluate_retrieval(
-    cases: list[Case], embedder: Embedder, store: VectorStore, top_k: int = 5
+    cases: list[Case],
+    embedder: Embedder,
+    store: VectorStore,
+    top_k: int = 5,
+    mode: RetrievalMode = "semantic",
+    candidates: int = 20,
 ) -> RetrievalReport:
     doc_ranks: list[int | None] = []
     page_ranks: list[int | None] = []
     answerable_top: list[float] = []
     unanswerable_top: list[float] = []
     misses: list[str] = []
+    tagged: dict[str, list[int | None]] = {}
 
     for case in cases:
-        chunks = _retrieved(embedder, store, case, top_k)
+        chunks = _retrieved(embedder, store, case, top_k, mode, candidates)
         top_score = chunks[0].score if chunks else 0.0
         if case.not_specified:
             continue  # the topic IS in the documents, so a high similarity is legitimate
@@ -56,6 +69,7 @@ def evaluate_retrieval(
         answerable_top.append(top_score)
         doc_rank = first_hit_rank(chunks, case.expected, check_page=False)
         doc_ranks.append(doc_rank)
+        tagged.setdefault(case.tag or "original", []).append(doc_rank)
         page_ranks.append(first_hit_rank(chunks, case.expected, check_page=True))
         if doc_rank is None:
             misses.append(case.id)
@@ -65,6 +79,7 @@ def evaluate_retrieval(
         by_page=summarize(page_ranks),
         score_spread=score_spread(answerable_top, unanswerable_top),
         misses=misses,
+        by_tag={tag: summarize(ranks) for tag, ranks in tagged.items()},
     )
 
 
@@ -76,6 +91,7 @@ class AnswerResult:
     case_id: str
     case_type: str
     question: str
+    tag: str
     status: str
     reason: str | None
     answer: str
@@ -95,9 +111,15 @@ def evaluate_answers(
     *,
     top_k: int = 5,
     min_score: float = 0.40,
+    retrieval_mode: RetrievalMode = "semantic",
+    use_rerank: bool = False,
+    rerank_top_n: int = 8,
+    rerank_min_relevance: int = 2,
+    workers: int = 1,
 ) -> list[AnswerResult]:
-    results: list[AnswerResult] = []
-    for case in cases:
+    """Answer every case. With `workers` > 1 the questions run in parallel (results keep order)."""
+
+    def one(case: Case) -> AnswerResult:
         reply = answer_question(
             case.question,
             embedder=embedder,
@@ -105,20 +127,27 @@ def evaluate_answers(
             chat_model=chat_model,
             top_k=top_k,
             min_score=min_score,
+            retrieval_mode=retrieval_mode,
+            use_rerank=use_rerank,
+            rerank_top_n=rerank_top_n,
+            rerank_min_relevance=rerank_min_relevance,
         )
-        results.append(
-            AnswerResult(
-                case_id=case.id,
-                case_type=case.type,
-                question=case.question,
-                status=reply.status,
-                reason=reply.reason,
-                answer=reply.answer,
-                source_codes=tuple(dict.fromkeys(s.doc_code for s in reply.sources)),
-                expected_codes=tuple(dict.fromkeys(e.doc_code for e in case.expected)),
-            )
+        return AnswerResult(
+            case_id=case.id,
+            case_type=case.type,
+            question=case.question,
+            tag=case.tag,
+            status=reply.status,
+            reason=reply.reason,
+            answer=reply.answer,
+            source_codes=tuple(dict.fromkeys(s.doc_code for s in reply.sources)),
+            expected_codes=tuple(dict.fromkeys(e.doc_code for e in case.expected)),
         )
-    return results
+
+    if workers <= 1:
+        return [one(case) for case in cases]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(one, cases))
 
 
 def summarize_answers(results: list[AnswerResult]) -> dict[str, object]:

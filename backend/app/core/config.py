@@ -48,11 +48,18 @@ class Settings(BaseSettings):
     chat_temperature: float | None = 0.0  # None = leave to the model (some models require it)
     chat_max_tokens: int = 600
     retrieval_top_k: int = 5
+    # How candidates are found, and whether a model re-checks them before they are used.
+    retrieval_mode: Literal["semantic", "hybrid"] = "hybrid"  # hybrid = meaning + keywords
+    retrieval_candidates: int = 20  # candidates gathered per method before fusing
+    lexical_max_chunks: int = 5000  # keyword search scans at most this many permitted chunks
+    rerank_enabled: bool = True
+    rerank_top_n: int = 8  # candidates the reranking model is shown
+    rerank_min_relevance: int = 2  # 0-3 scale; lower-scored candidates are dropped
     chat_history_turns: int = 3  # earlier question/answer pairs used to resolve follow-ups
-    # Chunks scoring below this are never shown to the model. Calibrated for text-embedding-3-small
-    # with the real embedder. 0.40 sits below every answerable golden question (lowest 0.458)
-    # and above only the clearest misses. See docs/retrieval-baseline.md before changing it.
-    retrieval_min_score: float = 0.40
+    # Chunks scoring below this meaning-similarity are never shown to the model. 0.25 is a floor for
+    # use WITH reranking, which judges relevance properly. Without reranking the right value is
+    # about 0.40 (see docs/retrieval-baseline.md; a looser gate then lets weak matches through).
+    retrieval_min_score: float = 0.25
 
     @model_validator(mode="after")
     def _require_secrets_in_production(self) -> "Settings":
@@ -91,6 +98,14 @@ class Settings(BaseSettings):
             raise ValueError("RETRIEVAL_MIN_SCORE must be between 0 and 1")
         if not 0 <= self.chat_history_turns <= 10:
             raise ValueError("CHAT_HISTORY_TURNS must be between 0 and 10")
+        if not 1 <= self.retrieval_candidates <= 100:
+            raise ValueError("RETRIEVAL_CANDIDATES must be between 1 and 100")
+        if not 1 <= self.rerank_top_n <= 20:
+            raise ValueError("RERANK_TOP_N must be between 1 and 20")
+        if not 0 <= self.rerank_min_relevance <= 3:
+            raise ValueError("RERANK_MIN_RELEVANCE must be between 0 and 3")
+        if self.lexical_max_chunks < 1:
+            raise ValueError("LEXICAL_MAX_CHUNKS must be at least 1")
         if not 1 <= self.retrieval_top_k <= 20:
             raise ValueError("RETRIEVAL_TOP_K must be between 1 and 20")
         if self.chat_temperature is not None and not 0.0 <= self.chat_temperature <= 2.0:

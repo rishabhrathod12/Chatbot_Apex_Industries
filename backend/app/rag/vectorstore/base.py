@@ -36,6 +36,15 @@ class SearchHit:
     metadata: dict[str, str | int]
 
 
+@dataclass(frozen=True)
+class StoredChunk:
+    """A chunk as stored, without any similarity score (used by keyword search)."""
+
+    chunk_id: str
+    text: str
+    metadata: dict[str, str | int]
+
+
 class VectorStore(Protocol):
     """One collection of chunk vectors. Implementations must be thread-safe."""
 
@@ -53,6 +62,13 @@ class VectorStore(Protocol):
         top_k: int,
         search_filter: SearchFilter | None = None,
     ) -> list[SearchHit]: ...
+
+    def scan(self, search_filter: SearchFilter | None, limit: int) -> list[StoredChunk]:
+        """Every chunk the filter allows (up to `limit`). Keyword search runs over exactly this
+        set, so it can never see or learn from chunks the user may not access."""
+        ...
+
+    def vectors_for(self, chunk_ids: Sequence[str]) -> dict[str, list[float]]: ...
 
     def delete_document(self, document_id: str) -> None: ...
 

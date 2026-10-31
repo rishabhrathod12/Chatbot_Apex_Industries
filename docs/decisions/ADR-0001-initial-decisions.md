@@ -111,3 +111,14 @@ Decided by the user: the Safety manual and HR policy are company-wide, everythin
 10. **Existing M3-M10 data:** documents and conversations created before login belonged to a placeholder user and are not visible to anyone after upgrading. For development, wipe `storage/` and `vector_db/` and re-upload (the `.gitignore`d demo data). A real deployment would migrate owners first.
 
 Bug found by the tests while building this: changing a user's departments to an overlapping set crashed with a 500 (the old rows were cleared and re-added, violating the unique constraint). Fixed by writing only the difference.
+
+## ADR-0011: Hybrid search and reranking (M12, 2026-10-31)
+
+1. **Reranker: a model call, not a local cross-encoder.** This resolves the open question from M0. A local model needs PyTorch (a very large install, 8 GB RAM, and this machine has already crashed on several native packages). A model call is one small function, can be tested with a fake, and sits behind a simple interface so a local reranker could replace it later. Cost: one extra call per question (about 1.2 s and about twice the model spend).
+2. **The reranker judges "does this answer the question", not "is this similar".** Scores 0 to 3, candidates below 2 are dropped. This directly targets the M7 weakness (related but different passages being used to answer).
+3. **It can only drop or reorder passages it was given.** Its reply must be a strict JSON object of integers 0 to 3 for exactly the passages shown. Anything else (bad JSON, a missing passage, an extra passage, a score out of range, a model error) means the original order is used. Passage text is delimiter-neutralised before it is shown. A test found that my first version neutralised the wrong delimiter; fixed.
+4. **Keyword search is permission-safe by construction.** The store's `scan()` takes the same filter as vector search, and BM25 runs only over what it returns. Its word-rarity statistics therefore come only from chunks the user may see. Tests check this for every user in both new modes, including everything sent to either model.
+5. **Own BM25 (about 70 lines), not a library.** No new dependency, and the permitted-set property is easy to verify. Replace with a real search index when the library grows (M10/M14).
+6. **Defaults chosen from measurement, not assumption**: hybrid + rerank + gate 0.25 (section 6 of `docs/retrieval-baseline.md`). All three are settings. If reranking is off, raise the gate to about 0.40.
+7. **The M7 gate of 0.40 is withdrawn.** It was calibrated on questions that were too easy and wrongly refused 20% of valid questions on a harder set.
+8. **Gate 0.25 over 0.15 is a judgement call**: it accepts about 1 wrongly refused question in 54 to avoid wrongly answering near-miss questions. Revisit with more data.

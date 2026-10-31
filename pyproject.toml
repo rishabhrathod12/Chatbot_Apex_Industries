@@ -59,6 +59,7 @@ explicit_package_bases = true
 
 [tool.ruff.lint.per-file-ignores]
 "backend/alembic/versions/*" = ["I", "UP", "E501"]
+"backend/tests/**" = ["F811"]  # a fixture imported from another test file is used by name
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Form"]

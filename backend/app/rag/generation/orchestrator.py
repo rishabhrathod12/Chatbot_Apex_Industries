@@ -5,8 +5,9 @@ import time
 from app.rag.generation.citations import select_quote
 from app.rag.generation.llm import ChatModel
 from app.rag.generation.prompts import NOT_FOUND_MESSAGE, NOT_FOUND_TOKEN, build_messages
+from app.rag.generation.rerank import rerank
 from app.rag.ingestion.embedder import Embedder
-from app.rag.retrieval import semantic_search
+from app.rag.retrieval import RetrievalMode, retrieve
 from app.rag.vectorstore import SearchFilter, SearchHit, VectorStore
 from app.schemas.chat import ChatAnswer, Source
 
@@ -63,27 +64,59 @@ def answer_question(
     search_filter: SearchFilter | None = None,
     top_k: int = 5,
     min_score: float = 0.40,
+    retrieval_mode: RetrievalMode = "semantic",
+    candidates: int = 20,
+    max_scan: int = 5000,
+    use_rerank: bool = False,
+    rerank_top_n: int = 8,
+    rerank_min_relevance: int = 2,
 ) -> ChatAnswer:
-    """Retrieve, ask the model, and check the answer before returning it.
+    """Retrieve, optionally re-check relevance, ask the model, and check the answer.
 
-    The model only ever sees chunks the filter allowed and that scored at least `min_score`. If
-    nothing qualifies the model is not called at all. An answer is only returned when it cites at
-    least one excerpt that was actually provided.
+    The model only ever sees chunks the filter allowed, that scored at least `min_score`, and (when
+    reranking is on) that a relevance check kept. If nothing qualifies the answering model is not
+    called at all. An answer is only returned when it cites at least one excerpt that was provided.
     """
     started = time.perf_counter()
-    hits = semantic_search(embedder, store, question, top_k=top_k, search_filter=search_filter)
+    wanted = max(top_k, rerank_top_n) if use_rerank else top_k
+    hits = retrieve(
+        embedder,
+        store,
+        question,
+        top_k=wanted,
+        search_filter=search_filter,
+        mode=retrieval_mode,
+        candidates=candidates,
+        max_scan=max_scan,
+    )
     relevant = [hit for hit in hits if hit.score >= min_score]
 
-    result = (
-        _generate(question, relevant, chat_model) if relevant else _not_found("no_relevant_context")
-    )
+    reranked = dropped = 0
+    low_relevance = False
+    if use_rerank and relevant:
+        outcome = rerank(
+            question, relevant, chat_model, top_n=rerank_top_n, min_relevance=rerank_min_relevance
+        )
+        if outcome is not None:  # on any failure we simply keep the retrieval order
+            reranked, dropped = len(relevant[:rerank_top_n]), outcome.dropped
+            low_relevance = not outcome.hits
+            relevant = outcome.hits
+    relevant = relevant[:top_k]
+
+    if relevant:
+        result = _generate(question, relevant, chat_model)
+    else:
+        result = _not_found("low_relevance" if low_relevance else "no_relevant_context")
     logger.info(
         "question answered",
         extra={
             "status": result.status,
             "reason": result.reason,
+            "mode": retrieval_mode,
             "retrieved": len(hits),
             "relevant": len(relevant),
+            "reranked": reranked,
+            "dropped_by_rerank": dropped,
             "sources": len(result.sources),
             "duration_ms": round((time.perf_counter() - started) * 1000, 1),
         },

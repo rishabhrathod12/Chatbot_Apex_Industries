@@ -23,7 +23,8 @@ class ChatAnswer(BaseModel):
     status: Literal["answered", "not_found"]
     answer: str
     sources: list[Source]
-    # Why nothing was answered: no_relevant_context, model_declined, uncited_answer, empty_answer.
+    # Why nothing was answered: no_relevant_context, low_relevance, model_declined, uncited_answer,
+    # empty_answer.
     reason: str | None = None
     conversation_id: str | None = None
     message_id: str | None = None

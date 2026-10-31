@@ -22,6 +22,7 @@ class Case:
     type: str
     question: str
     expected: tuple[Expected, ...]
+    tag: str = ""  # keyword | paraphrase | near_miss, or empty for the original cases
 
     @property
     def answerable(self) -> bool:
@@ -66,6 +67,7 @@ def load_golden(path: Path = GOLDEN_SET) -> list[Case]:
             type=c["type"],
             question=c["question"],
             expected=tuple(Expected(e["doc_code"], e.get("page")) for e in c["expected"]),
+            tag=c.get("tag", ""),
         )
         for c in raw["cases"]
     ]

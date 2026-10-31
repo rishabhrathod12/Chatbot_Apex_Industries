@@ -1,4 +1,10 @@
-from app.rag.vectorstore.base import SearchFilter, SearchHit, VectorStore, VectorStoreError
+from app.rag.vectorstore.base import (
+    SearchFilter,
+    SearchHit,
+    StoredChunk,
+    VectorStore,
+    VectorStoreError,
+)
 from app.rag.vectorstore.qdrant_store import (
     QdrantVectorStore,
     close_all,
@@ -10,6 +16,7 @@ __all__ = [
     "QdrantVectorStore",
     "SearchFilter",
     "SearchHit",
+    "StoredChunk",
     "VectorStore",
     "VectorStoreError",
     "close_all",

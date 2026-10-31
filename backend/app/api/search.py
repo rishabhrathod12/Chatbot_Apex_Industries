@@ -15,7 +15,7 @@ from app.core.departments import canonical_department
 from app.core.permissions import Principal, build_search_filter
 from app.rag.ingestion.embedder import EmbeddingError, embedding_dimensions
 from app.rag.ingestion.pipeline import EmbedderProvider, StoreProvider
-from app.rag.retrieval import semantic_search
+from app.rag.retrieval import retrieve
 from app.rag.vectorstore import VectorStoreError
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -64,8 +64,15 @@ def search(
     try:
         embedder = embedder_provider()
         store = store_provider(body.scope, embedding_dimensions(settings))
-        hits = semantic_search(
-            embedder, store, body.query, top_k=body.top_k, search_filter=search_filter
+        hits = retrieve(
+            embedder,
+            store,
+            body.query,
+            top_k=body.top_k,
+            search_filter=search_filter,
+            mode=settings.retrieval_mode,
+            candidates=settings.retrieval_candidates,
+            max_scan=settings.lexical_max_chunks,
         )
     except EmbeddingError as exc:
         raise HTTPException(status_code=503, detail=exc.reason) from exc

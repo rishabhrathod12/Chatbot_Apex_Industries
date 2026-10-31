@@ -36,6 +36,9 @@ def settings(tmp_path: Path) -> Iterator[Settings]:
         upload_dir=str(tmp_path / "uploads"),
         vector_store_path=str(tmp_path / "vectors"),
         embedding_provider="hashing",  # offline: no API key and no network in the normal suite
+        # Feature tests use the plain pipeline. Tests of hybrid search and reranking turn them on.
+        retrieval_mode="semantic",
+        rerank_enabled=False,
         max_upload_mb=1,
         max_files_per_request=3,
         jwt_secret_key="test-secret-" + "x" * 32,
