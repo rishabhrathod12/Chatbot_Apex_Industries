@@ -1,3 +1,74 @@
+# Security Test Report
+
+**Contents:** (A) the authorization sweep after the authentication redesign, then (B) the original M11 report.
+
+## A. Authorization sweep after the authentication redesign (2026-10-31)
+
+Scope: portals and Login IDs, temporary passwords, admin tools, company document archive and versions, old-conversation citations, and the employee and Super Admin workspaces, all attacked from the other side. Result of the full suite: **1145 passed, 4 skipped (Postgres), 2 expected failures (M6), 0 failed**, ruff and mypy clean. The sweep itself is 111 tests, about 50 seconds.
+
+Run it: `pytest -q backend/tests/integration/test_authorization_sweep.py backend/tests/integration/test_authorization_changes.py`
+
+### What the sweep attacks
+
+| Attack | How | Result |
+|---|---|---|
+| An endpoint added without anyone deciding who may call it | every route in the live API description must be in an explicit list (public, usable with a temporary password, any signed-in person, or Super Admin only) | the test fails for any unlisted or stale route |
+| Admin pages used by anyone else | every `/users` and `/admin` route, called as two managers and two employees | 403 `not_allowed` before the request body is even read; 401 without a token |
+| A private document, touched by everyone else | 7 endpoints (open, history, re-index, archive, restore, new version, delete) x 6 attackers (a colleague, another department, both managers, two Super Admins) | all 42 get the **same answer as a document that does not exist** (404, identical body); the document is unchanged afterwards and still found by its owner |
+| Private documents in other libraries | the library listing of every other person | never listed |
+| Forged search and chat fields | `owner_id`, `user_id`, `document_ids`, `departments`, `include_company_wide`, `filter`, `search_filter`, `role`, sent with personal and company scope | results and cited sources never include another person's private document or a forbidden department; the language model's prompts (captured and inspected) never contain their text |
+| The department box | `quality`, `QUALITY`, ` quality `, `Quality Control`, `qc` as a forbidden department | nothing from it, or a 422 |
+| A Super Admin reading private documents | company search and chat as each Super Admin | private documents never appear (the documented policy); company documents they may read still do |
+| Someone else's conversation | read, delete and continue by id | 404 each time; nothing is added to it |
+| A temporary password | every signed-in and admin route | 403 `password_change_required`, except the way out |
+| A disabled account | every route, with a token issued before it was disabled | 401 everywhere; refresh and sign-in also refused |
+| A demotion or promotion | the old token, on the very next request | admin powers gone at once; manager powers granted at once and only for their department |
+| Company uploads | an employee and a manager, to each of 6 departments, with and without company-wide visibility | employees: 403 for all 12; a manager: only their own department |
+| Fields a client should not set | extra fields on user update and create (login ID, password hash, e-mail, creator, the forced-change flag, id) | ignored; an admin-created account always has to change its password |
+| Dodging the login lockout | rotating `X-Forwarded-For`, `X-Real-IP`, `Forwarded` | still locked out |
+| Closing the first-time setup | posting to it once anyone exists | 409 |
+| The audit trail | refused attempts by a colleague | recorded as "denied"; the whole log contains no document text, password or token |
+
+The read-only attacks run against the settings of a real deployment (keyword plus meaning search, then the reranking check), because those paths read the stored text directly. The earlier M11 matrix runs in the offline test setup.
+
+### Do these tests really catch mistakes? (mutation check)
+
+Each line below was deliberately broken in the real code, the sweep run, and the code restored. **All 11 were caught.**
+
+| Deliberate mistake | Caught by |
+|---|---|
+| Anyone may read any personal document | the private-document tests |
+| Personal search not limited to its owner | the forged-fields and prompt tests |
+| The Super Admin check removed | the admin-route test |
+| The forced password change skipped | the temporary-password test |
+| The department limit dropped from the search filter | the forged-fields and prompt tests |
+| A manager may add to any department | the upload tests |
+| Disabled accounts still accepted | the disabled-account test |
+| Anyone may open anyone's conversation | the conversation test |
+| The client controls the forced-change flag | the forged-fields test |
+| The login lockout trusts `X-Forwarded-For` | the lockout test |
+| A new, unclassified endpoint appears | the route classification test |
+
+Three earlier-phase checks were repeated: archived documents readable by everyone, old citations never redacted, and an unreadable document kept in a saved conversation. All caught.
+
+### Findings
+
+- **No new security defect was found**: every sweep test passed on its first run. That is a result, not proof. It means the checks above hold, not that nothing else can go wrong.
+- My first version of the sweep rebuilt the whole company for every test and took 3 minutes. The attacks that change nothing now share one company (about 50 seconds in total).
+
+### Not covered, on purpose or by limit
+
+- **The web pages in a real browser.** They were driven by Streamlit's test runner against a fake API; nobody has looked at them in a browser yet.
+- **Answer text in old conversations** is stored as the person saw it. Citations are blanked when access is lost; the text of the answer is not rewritten.
+- **PostgreSQL.** All of this ran on SQLite. The 4 Postgres tests are still skipped (no Postgres installed).
+- **Several API processes.** The login limiter and the last-Super-Admin lock are in memory (one process).
+- **TLS, and a stolen but still valid access token** (valid for at most 30 minutes; refresh tokens can be revoked).
+- **Prompt injection inside a permitted document** is a model-behaviour risk, handled by the answering rules, not by access control.
+
+---
+
+## B. M11 report (2026-10-31)
+
 # Security Test Report: M11 (2026-10-31)
 
 Scope: login, roles, department permissions, personal privacy, and the audit trail.

@@ -1,6 +1,22 @@
 # RAGAS Evaluation (M13)
 
-**Status:** built and tested offline (2026-10-31). **No real scores yet**: they need `OPENAI_API_KEY`.
+**Status:** built, tested offline, and run once for real on 2026-10-31 (first baseline below).
+
+## First baseline (2026-10-31)
+
+Judge `gpt-4.1-mini`, embeddings `text-embedding-3-small`, the app's defaults (hybrid search, reranking), the 71-question golden set. 55 questions were answered and scored; 16 were refused and are not scored. No judge failures.
+
+| Score | Mean | Lowest | Below the review line |
+|---|---|---|---|
+| Faithfulness | 0.91 | 0.00 | 8 questions |
+| Answer relevancy | 0.68 | 0.00 | 33 questions |
+| Context precision | 0.98 | 0.33 | 2 questions |
+
+By kind of question, faithfulness is 1.00 on the original answerable questions and falls to about 0.7 on paraphrased, held-out and near-miss ones. Retrieval looks strong (precision 0.98). The relevancy score is probably misleading: RAGAS generates questions from the answer and compares them with the real one, so bulleted procedure answers and answers that say "not specified" score low (a "not specified" answer scores 0).
+
+**Not yet done:** reading the 8 low-faithfulness answers (K03, P01, P02, N03, H04, J02, J06, J07), and H07, an answerable question that was refused. The per-question scores are in `eval/results/ragas.json` (git-ignored).
+
+## Original notes (written before the first run)
 
 ## What it measures
 
@@ -64,7 +80,8 @@ question. Expect cents, not dollars, for the full set; measure with `--limit` fi
   refusals, score summary and NaN handling, the CLI end to end with a fake judge, and a clear error when
   ragas or the key is missing.
 - Verified: ragas 0.4.3 and langchain-openai import in `.venv-eval`.
-- **Not verified:** the real call into `ragas.evaluate` (dataset construction, metric names, the
-  `to_pandas` result columns). It was written against ragas 0.4.3's API but has not run, because it needs a
-  live judge. Expect to fix small things on the first `--limit 1` run.
-- No baseline numbers exist yet. When they do, record them here, as `docs/retrieval-baseline.md` does.
+- Verified for real (2026-10-31): the call into `ragas.evaluate` worked on the first run, a 1-question trial
+  and then the full golden set, with no code changes needed. The warning "LLM returned 1 generations instead
+  of requested 3" comes from the answer-relevancy metric and is harmless.
+- The first baseline is at the top of this page. It was run once; scores vary a little between runs, so
+  compare future runs against it with care.
