@@ -40,6 +40,7 @@ class Principal:
     role: Role
     departments: frozenset[str]
     login_id: str = ""
+    must_change_password: bool = False
 
     @property
     def is_admin(self) -> bool:

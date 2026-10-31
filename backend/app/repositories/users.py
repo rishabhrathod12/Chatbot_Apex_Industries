@@ -65,6 +65,8 @@ def create(
     role: str,
     departments: Iterable[str],
     login_id: str | None = None,
+    must_change_password: bool = False,
+    created_by: str | None = None,
 ) -> User:
     email = email.strip().lower()
     user = User(
@@ -73,6 +75,8 @@ def create(
         full_name=full_name,
         password_hash=password_hash,
         role=role,
+        must_change_password=must_change_password,
+        created_by=created_by,
     )
     set_departments(user, departments)
     db.add(user)

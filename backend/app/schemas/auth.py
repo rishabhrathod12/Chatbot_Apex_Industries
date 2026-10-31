@@ -73,6 +73,7 @@ class PrincipalOut(BaseModel):
     full_name: str
     role: Role
     departments: list[str]
+    must_change_password: bool = False  # the app must show "choose a new password" first
 
 
 class TokenPair(BaseModel):
@@ -92,12 +93,24 @@ class UserOut(BaseModel):
     departments: list[str]
     is_active: bool
     created_at: datetime
+    must_change_password: bool = False
+
+
+class UserCreated(UserOut):
+    """The reply to creating an account. The temporary password is in this one response only
+    (and only if the server generated it); it is never stored, logged or shown again."""
+
+    temporary_password: str | None = None
 
 
 class UserCreate(BaseModel):
     email: Email
     full_name: str = Field(min_length=1, max_length=120)
-    password: str = Field(min_length=1, max_length=256)  # length rule comes from settings
+    # Leave out to have the server generate a temporary password (admin creation only).
+    # The length rule comes from settings.
+    password: str | None = Field(default=None, min_length=1, max_length=256)
+    # Leave out to have one made from the name.
+    login_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._-]{3,32}$")
     role: Role
     departments: DepartmentList = []
 
@@ -110,4 +123,15 @@ class UserUpdate(BaseModel):
 
 
 class PasswordReset(BaseModel):
-    password: str = Field(min_length=1, max_length=256)
+    """Leave `password` out to have the server generate a temporary one."""
+
+    password: str | None = Field(default=None, min_length=1, max_length=256)
+
+
+class PasswordResetResult(BaseModel):
+    temporary_password: str | None = None  # only when generated, shown this once
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=1, max_length=256)

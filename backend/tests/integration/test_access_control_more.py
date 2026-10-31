@@ -324,7 +324,8 @@ def test_an_admin_can_create_a_user_who_can_then_log_in(
         ["quality"],
         True,
     )
-    assert "password" not in response.text
+    assert "a-long-enough-password" not in response.text
+    assert body["temporary_password"] is None  # the admin typed it, so it is not echoed back
     login(raw_client, "new.person@apex.test", "a-long-enough-password")
 
 
@@ -456,7 +457,7 @@ def test_a_password_reset_ends_old_sessions_and_the_old_password(
         headers=people["admin"],
         json={"password": "brand-new-password-1"},
     )
-    assert done.status_code == 204
+    assert (done.status_code, done.json()) == (200, {"temporary_password": None})
     assert (
         raw_client.post(
             "/api/v1/auth/refresh", json={"refresh_token": pair["refresh_token"]}

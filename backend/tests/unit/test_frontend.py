@@ -407,6 +407,9 @@ class FakeApi:
         }
         self.setup_error: ApiError | None = None
         self.setup_calls: list[tuple[str, str, str, str]] = []
+        self.change_error: ApiError | None = None
+        self.change_calls: list[tuple[str, str]] = []
+        self.temporary_password: str | None = None
         self.created: list[tuple[Any, ...]] = []
         self.updated: list[tuple[str, dict[str, Any]]] = []
 
@@ -468,13 +471,25 @@ class FakeApi:
 
     def create_user(self, *args: Any) -> dict[str, Any]:
         self.created.append(args)
-        return {"email": args[0]}
+        return {
+            "email": args[0],
+            "login_id": "new.person",
+            "temporary_password": self.temporary_password,
+        }
+
+    def change_password(self, current: str, new: str) -> dict[str, Any]:
+        self.change_calls.append((current, new))
+        if self.change_error:
+            raise self.change_error
+        assert self.user is not None
+        self.user = {**self.user, "must_change_password": False}
+        return self.user
 
     def update_user(self, user_id: str, **changes: Any) -> dict[str, Any]:
         self.updated.append((user_id, changes))
         return {}
 
-    def reset_password(self, user_id: str, password: str) -> None:
+    def reset_password(self, user_id: str, password: str | None) -> str | None:
         return None
 
 
@@ -841,3 +856,76 @@ def test_once_an_account_exists_the_normal_sign_in_form_returns(
 ) -> None:
     app = _run(monkeypatch, FakeApi(user=None))  # setup_required is False by default
     assert [t.label for t in app.text_input] == ["Login ID or email", "Password"]
+
+
+# ---- temporary passwords ----
+
+TEMPORARY = {**EMPLOYEE, "must_change_password": True}
+
+
+def _fill_change(app: AppTest, current: str, new: str, repeat: str | None = None) -> None:
+    app.text_input[0].set_value(current)
+    app.text_input[1].set_value(new)
+    app.text_input[2].set_value(new if repeat is None else repeat)
+
+
+def test_a_temporary_password_shows_only_the_change_form(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _run(monkeypatch, FakeApi(user=TEMPORARY))
+    assert not app.exception
+    assert [t.label for t in app.text_input] == [
+        "Current (temporary) password",
+        "New password",
+        "Repeat new password",
+    ]
+    assert not app.chat_input and not app.sidebar.radio  # nothing else is reachable
+
+
+def test_choosing_a_new_password_continues_into_the_app(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeApi(user=TEMPORARY, conversations=False)
+    app = _run(monkeypatch, fake)
+    _fill_change(app, "temp-password-1", "my-own-password-9")
+    app.button[0].click().run()
+    assert fake.change_calls == [("temp-password-1", "my-own-password-9")]
+    assert app.title[0].value == "Ask the documents"
+
+
+def test_mismatched_new_passwords_are_caught_before_sending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeApi(user=TEMPORARY)
+    app = _run(monkeypatch, fake)
+    _fill_change(app, "temp-password-1", "my-own-password-9", repeat="different-password-9")
+    app.button[0].click().run()
+    assert fake.change_calls == []
+    assert any("do not match" in e.value for e in app.error)
+
+
+def test_a_server_refusal_stays_on_the_change_form_in_plain_words(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeApi(user=TEMPORARY)
+    fake.change_error = ApiError(422, "current_password_incorrect")
+    app = _run(monkeypatch, fake)
+    _fill_change(app, "wrong", "my-own-password-9")
+    app.button[0].click().run()
+    assert any("current password is not correct" in e.value for e in app.error)
+    assert [t.label for t in app.text_input][0] == "Current (temporary) password"
+
+
+def test_the_generated_password_is_shown_once_after_creating_a_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeApi(user=ADMIN)
+    fake.temporary_password = "Gen3rated-Temp-Pass"
+    app = _app(monkeypatch, fake)
+    app.query_params["page"] = "users"
+    app.run()
+    labels = [t.label for t in app.text_input]
+    assert "Temporary password (optional)" in labels
+    next(t for t in app.text_input if t.label == "Email").set_value("new@apex.test")
+    next(t for t in app.text_input if t.label == "Full name").set_value("New Person")
+    app.button[0].click().run()
+    assert fake.created[0][2] is None  # blank means "generate one"
+    assert any(c.value == "Gen3rated-Temp-Pass" for c in app.code)
+    app.run()  # any later interaction: the password is gone
+    assert not any(c.value == "Gen3rated-Temp-Pass" for c in app.code)

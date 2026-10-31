@@ -31,7 +31,7 @@ def test_the_first_account_is_a_super_admin_who_can_sign_in(raw_client: TestClie
     assert response.status_code == 201
     assert response.json()["role"] == "super_admin"
     assert response.json()["email"] == "boss@apex.test"
-    assert "password" not in response.text
+    assert PASSWORD not in response.text
 
     login = raw_client.post(
         "/api/v1/auth/login", json={"email": "boss@apex.test", "password": PASSWORD}

@@ -132,6 +132,44 @@ def login_page() -> None:
         st.caption("Accounts are created by a Super Admin. There is no self sign-up.")
 
 
+def password_change_page() -> None:
+    """Shown instead of the app while a temporary password is still in force."""
+    _, middle, _ = st.columns([1, 2, 1])
+    with middle:
+        st.markdown("## Choose a new password")
+        st.write(
+            "You signed in with a temporary password. Choose your own to continue. "
+            "It must be at least 12 characters."
+        )
+        with st.form("change-password"):
+            current = st.text_input("Current (temporary) password", type="password")
+            new = st.text_input("New password", type="password")
+            repeat = st.text_input("Repeat new password", type="password")
+            submitted = st.form_submit_button(
+                "Change password", type="primary", use_container_width=True
+            )
+        if st.button("Sign out", use_container_width=True):
+            api().logout()
+            st.rerun()
+        if not submitted:
+            return
+        if not current or not new:
+            st.error("Please fill in all three boxes.")
+            return
+        if new != repeat:
+            st.error("The two new passwords do not match.")
+            return
+        try:
+            api().change_password(current, new)
+        except ApiError as error:
+            st.error(ui.retry_message(error), icon="\U0001f512")
+            return
+        except ApiUnreachable:
+            st.error("Cannot reach the API. Is it running?", icon="\U0001f50c")
+            return
+        st.rerun()
+
+
 # ----------------------------------------------------------------------------- sidebar
 
 
@@ -432,24 +470,54 @@ def documents_page() -> None:
 # ----------------------------------------------------------------------------- users
 
 
+def show_temporary_password(password: str) -> None:
+    st.warning(
+        "Give the person this temporary password now. It is shown only once and cannot be "
+        "looked up later (you can reset it again if it is lost).",
+        icon="\U0001f511",
+    )
+    st.code(password, language=None)
+
+
+def show_new_account(created: dict[str, Any]) -> None:
+    st.success(
+        f"Created {created['email']}. Login ID: {created.get('login_id', '')}. "
+        "They must choose their own password at first sign-in."
+    )
+    if created.get("temporary_password"):
+        show_temporary_password(created["temporary_password"])
+
+
 def create_user_form() -> None:
     with st.expander("➕ Add a user"), st.form("create-user", clear_on_submit=True):
         email = st.text_input("Email")
         full_name = st.text_input("Full name")
         role_label = st.selectbox("Role", list(ui.ROLES.values()))
         names = st.multiselect("Departments", list(ui.DEPARTMENTS.values()))
+        login_id = st.text_input(
+            "Login ID (optional)", help="Leave empty to make one from the name."
+        )
         password = st.text_input(
-            "Temporary password", type="password", help="At least 12 characters."
+            "Temporary password (optional)",
+            type="password",
+            help="Leave empty to generate a secure one. They must change it at first sign-in.",
         )
         if st.form_submit_button("Create user", type="primary"):
             role = next(code for code, label in ui.ROLES.items() if label == role_label)
             departments = [c for c, n in ui.DEPARTMENTS.items() if n in names]
             try:
-                created = api().create_user(email, full_name, password, role, departments)
+                created = api().create_user(
+                    email,
+                    full_name,
+                    password or None,
+                    role,
+                    departments,
+                    login_id.strip() or None,
+                )
             except ApiError as error:
                 st.error(ui.error_message(error))
             else:
-                st.success(f"Created {created['email']}. Ask them to sign in.")
+                show_new_account(created)
 
 
 def user_row(person: dict[str, Any], me: str) -> None:
@@ -476,15 +544,23 @@ def user_row(person: dict[str, Any], me: str) -> None:
                     st.rerun()
             with st.popover("Reset password"):
                 new_password = st.text_input(
-                    "New password", type="password", key=f"pw-{person['id']}"
+                    "New temporary password (optional)",
+                    type="password",
+                    help="Leave empty to generate one.",
+                    key=f"pw-{person['id']}",
                 )
-                if st.button("Set password", key=f"setpw-{person['id']}"):
+                if st.button("Reset password", key=f"setpw-{person['id']}"):
                     try:
-                        api().reset_password(person["id"], new_password)
+                        temporary = api().reset_password(person["id"], new_password or None)
                     except ApiError as error:
                         st.error(ui.error_message(error))
                     else:
-                        st.success("Password changed. Their old sessions have ended.")
+                        st.success(
+                            "Password reset. Their old sessions have ended and they must "
+                            "choose a new password at next sign-in."
+                        )
+                        if temporary:
+                            show_temporary_password(temporary)
 
 
 def users_page() -> None:
@@ -516,6 +592,10 @@ def main() -> None:
 
     if not api().is_logged_in:
         login_page()
+        st.stop()
+
+    if current_user().get("must_change_password"):
+        password_change_page()
         st.stop()
 
     try:

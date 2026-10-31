@@ -1,3 +1,6 @@
+import re
+import secrets
+
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -28,18 +31,42 @@ def _check_departments(role: Role, departments: list[str]) -> None:
         raise UserError("manager_needs_department")
 
 
-def create_user(db: Session, settings: Settings, actor: Principal | None, data: UserCreate) -> User:
-    check_password(data.password, settings)
+def generate_temporary_password(settings: Settings) -> str:
+    """A random password for an admin to hand over once. Always meets the length rule."""
+    return secrets.token_urlsafe(max(16, settings.password_min_length))
+
+
+def _name_to_login_base(full_name: str) -> str:
+    """ "Esha Production" -> "esha.production"; a lone name stays as it is."""
+    words = re.sub(r"[^a-z0-9 ._-]", "", full_name.lower()).split()
+    return ".".join([words[0], words[-1]] if len(words) > 1 else words) or "user"
+
+
+def _create(
+    db: Session,
+    settings: Settings,
+    actor: Principal | None,
+    data: UserCreate,
+    *,
+    password: str,
+    must_change_password: bool,
+) -> User:
+    check_password(password, settings)
     _check_departments(data.role, data.departments)
     if repo.get_by_email(db, data.email):
         raise UserError("email_taken", status=409)
+    if data.login_id and repo.get_by_login_id(db, data.login_id):
+        raise UserError("login_id_taken", status=409)
     user = repo.create(
         db,
         email=data.email,
         full_name=data.full_name,
-        password_hash=hash_password(data.password, settings.password_hash_cost_log2),
+        password_hash=hash_password(password, settings.password_hash_cost_log2),
         role=data.role.value,
         departments=data.departments,
+        login_id=data.login_id or _name_to_login_base(data.full_name),
+        must_change_password=must_change_password,
+        created_by=actor.user_id if actor else None,
     )
     db.commit()
     audit.record(
@@ -51,6 +78,28 @@ def create_user(db: Session, settings: Settings, actor: Principal | None, data: 
         target_id=user.id,
     )
     return user
+
+
+def create_user(db: Session, settings: Settings, actor: Principal | None, data: UserCreate) -> User:
+    """Create an account whose owner already knows the password (the command line, first-time
+    setup, tests). Nobody is forced to change it."""
+    if data.password is None:
+        raise UserError("password_required")
+    return _create(db, settings, actor, data, password=data.password, must_change_password=False)
+
+
+def create_account_for_employee(
+    db: Session, settings: Settings, actor: Principal, data: UserCreate
+) -> tuple[User, str | None]:
+    """An admin creates an account. The person must choose their own password at first sign-in.
+
+    Returns the user and, if the server generated the password, that password. It exists only
+    in this return value: it is hashed before anything is saved and appears in no log or audit row.
+    """
+    generated = data.password is None
+    password = data.password or generate_temporary_password(settings)
+    user = _create(db, settings, actor, data, password=password, must_change_password=True)
+    return user, (password if generated else None)
 
 
 def update_user(db: Session, actor: Principal, user: User, data: UserUpdate) -> User:
@@ -84,12 +133,20 @@ def update_user(db: Session, actor: Principal, user: User, data: UserUpdate) -> 
 
 
 def reset_password(
-    db: Session, settings: Settings, actor: Principal, user: User, password: str
-) -> None:
-    check_password(password, settings)
-    user.password_hash = hash_password(password, settings.password_hash_cost_log2)
+    db: Session, settings: Settings, actor: Principal, user: User, password: str | None
+) -> str | None:
+    """An admin sets a new password. The person must replace it at their next sign-in.
+
+    Returns the password only if the server generated it (shown to the admin once).
+    """
+    generated = password is None
+    new_password = password or generate_temporary_password(settings)
+    check_password(new_password, settings)
+    user.password_hash = hash_password(new_password, settings.password_hash_cost_log2)
+    user.must_change_password = True
     repo.revoke_all_refresh_tokens(db, user.id)  # old sessions end when the password changes
     db.commit()
     audit.record(
         db, "password_reset", "ok", user_id=actor.user_id, target_type="user", target_id=user.id
     )
+    return new_password if generated else None

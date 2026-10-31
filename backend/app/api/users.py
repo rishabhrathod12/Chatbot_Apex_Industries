@@ -1,6 +1,6 @@
 """User management. Super Admin only."""
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
@@ -9,7 +9,14 @@ from app.core.database import get_db
 from app.core.permissions import Principal, Role
 from app.models.user import User
 from app.repositories import users as repo
-from app.schemas.auth import PasswordReset, UserCreate, UserOut, UserUpdate
+from app.schemas.auth import (
+    PasswordReset,
+    PasswordResetResult,
+    UserCreate,
+    UserCreated,
+    UserOut,
+    UserUpdate,
+)
 from app.services import users as user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -25,6 +32,7 @@ def _out(user: User) -> UserOut:
         departments=sorted(user.department_codes),
         is_active=user.is_active,
         created_at=user.created_at,
+        must_change_password=user.must_change_password,
     )
 
 
@@ -46,15 +54,18 @@ def list_users(
     return [_out(u) for u in repo.list_all(db)]
 
 
-@router.post("", response_model=UserOut, status_code=201)
+@router.post("", response_model=UserCreated, status_code=201)
 def create_user(
     body: UserCreate,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     admin: Principal = Depends(require_admin),
-) -> UserOut:
+) -> UserCreated:
     try:
-        return _out(user_service.create_user(db, settings, admin, body))
+        user, temporary_password = user_service.create_account_for_employee(
+            db, settings, admin, body
+        )
+        return UserCreated(**_out(user).model_dump(), temporary_password=temporary_password)
     except user_service.UserError as exc:
         raise _refuse(exc) from exc
 
@@ -73,17 +84,17 @@ def update_user(
         raise _refuse(exc) from exc
 
 
-@router.post("/{user_id}/password", status_code=204)
+@router.post("/{user_id}/password", response_model=PasswordResetResult)
 def reset_password(
     user_id: str,
     body: PasswordReset,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     admin: Principal = Depends(require_admin),
-) -> Response:
+) -> PasswordResetResult:
     user = _get_or_404(db, user_id)
     try:
-        user_service.reset_password(db, settings, admin, user, body.password)
+        temporary = user_service.reset_password(db, settings, admin, user, body.password)
     except user_service.UserError as exc:
         raise _refuse(exc) from exc
-    return Response(status_code=204)
+    return PasswordResetResult(temporary_password=temporary)

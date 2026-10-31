@@ -49,6 +49,7 @@ def test_login_returns_tokens_and_who_you_are(raw_client: TestClient, alice) -> 
         "full_name": "alice",
         "role": "employee",
         "departments": ["production"],
+        "must_change_password": False,
     }
     me = raw_client.get(ME, headers={"Authorization": f"Bearer {body['access_token']}"})
     assert me.json() == body["user"]

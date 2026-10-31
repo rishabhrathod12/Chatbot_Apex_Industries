@@ -26,12 +26,14 @@ def _unauthorized(reason: str) -> HTTPException:
     return HTTPException(status_code=401, detail=reason, headers={"WWW-Authenticate": "Bearer"})
 
 
-def get_current_principal(
+def get_principal_allow_pending(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> Principal:
-    """The logged-in user, or a 401. Every endpoint that is not public depends on this.
+    """The logged-in user, even one who still has to choose a new password. Only the few
+    endpoints that let them do that (and sign out) use this; everything else uses
+    `get_current_principal`.
 
     The token only says who the user is. Role and departments are read from the database on every
     request, so removing someone's access, or disabling their account, takes effect immediately.
@@ -48,6 +50,19 @@ def get_current_principal(
     if user is None or not user.is_active:
         raise _unauthorized("invalid_token")
     return principal_of(user)
+
+
+def get_current_principal(
+    principal: Principal = Depends(get_principal_allow_pending),
+) -> Principal:
+    """The logged-in user, or a 401. Every endpoint that is not public depends on this.
+
+    Someone with a temporary password (just created, or just reset by an admin) gets a 403 on
+    everything until they have chosen their own.
+    """
+    if principal.must_change_password:
+        raise HTTPException(status_code=403, detail="password_change_required")
+    return principal
 
 
 def get_current_user_id(principal: Principal = Depends(get_current_principal)) -> str:

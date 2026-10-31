@@ -1,13 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_principal, get_login_limiter
+from app.api.deps import (
+    get_login_limiter,
+    get_principal_allow_pending,
+)
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.core.permissions import Principal
 from app.core.rate_limit import LoginLimiter
 from app.core.security import TokenError
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     PrincipalOut,
     RefreshRequest,
@@ -78,14 +82,31 @@ def setup(
     except auth_service.AuthError as exc:
         raise _as_http(exc) from exc
     principal = auth_service.principal_of(user)
-    return PrincipalOut(
-        user_id=principal.user_id,
-        login_id=principal.login_id,
-        email=principal.email,
-        full_name=principal.full_name,
-        role=principal.role,
-        departments=sorted(principal.departments),
-    )
+    return auth_service.principal_out(principal)
+
+
+@router.post("/change-password", response_model=TokenPair)
+def change_password(
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    limiter: LoginLimiter = Depends(get_login_limiter),
+    principal: Principal = Depends(get_principal_allow_pending),
+) -> TokenPair:
+    """Choose a new password. Allowed while a temporary password is still in force."""
+    try:
+        return auth_service.change_password(
+            db,
+            settings,
+            limiter,
+            principal,
+            current_password=body.current_password,
+            new_password=body.new_password,
+        )
+    except auth_service.AuthError as exc:
+        raise _as_http(exc) from exc
+    except TokenError as exc:
+        raise HTTPException(status_code=503, detail=exc.reason) from exc
 
 
 @router.post("/refresh", response_model=TokenPair)
@@ -109,12 +130,5 @@ def logout(body: RefreshRequest, db: Session = Depends(get_db)) -> Response:
 
 
 @router.get("/me", response_model=PrincipalOut)
-def me(principal: Principal = Depends(get_current_principal)) -> PrincipalOut:
-    return PrincipalOut(
-        user_id=principal.user_id,
-        login_id=principal.login_id,
-        email=principal.email,
-        full_name=principal.full_name,
-        role=principal.role,
-        departments=sorted(principal.departments),
-    )
+def me(principal: Principal = Depends(get_principal_allow_pending)) -> PrincipalOut:
+    return auth_service.principal_out(principal)

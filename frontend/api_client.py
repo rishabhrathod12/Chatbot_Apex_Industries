@@ -65,6 +65,17 @@ class ApiClient:
         assert self.user is not None
         return self.user
 
+    def change_password(self, current_password: str, new_password: str) -> dict[str, Any]:
+        """Choose a new password. The server ends the other sessions and returns a fresh one."""
+        pair = self._request(
+            "POST",
+            "/auth/change-password",
+            json={"current_password": current_password, "new_password": new_password},
+        )
+        self._store(pair)
+        assert self.user is not None
+        return self.user
+
     def setup_status(self) -> dict[str, Any]:
         """Does the system still need its first Super Admin? Needs no login."""
         status: dict[str, Any] = self._send("GET", "/auth/setup")
@@ -208,19 +219,31 @@ class ApiClient:
         return list(self._request("GET", "/users"))
 
     def create_user(
-        self, email: str, full_name: str, password: str, role: str, departments: list[str]
+        self,
+        email: str,
+        full_name: str,
+        password: str | None,
+        role: str,
+        departments: list[str],
+        login_id: str | None = None,
     ) -> dict[str, Any]:
+        """`password` None asks the server for a temporary one (returned once as
+        `temporary_password`)."""
         body = {
             "email": email,
             "full_name": full_name,
             "password": password,
             "role": role,
             "departments": departments,
+            "login_id": login_id,
         }
         return dict(self._request("POST", "/users", json=body))
 
     def update_user(self, user_id: str, **changes: Any) -> dict[str, Any]:
         return dict(self._request("PATCH", f"/users/{user_id}", json=changes))
 
-    def reset_password(self, user_id: str, password: str) -> None:
-        self._request("POST", f"/users/{user_id}/password", json={"password": password})
+    def reset_password(self, user_id: str, password: str | None) -> str | None:
+        """Returns the generated temporary password, or None if `password` was given."""
+        result = self._request("POST", f"/users/{user_id}/password", json={"password": password})
+        temporary = result.get("temporary_password") if isinstance(result, dict) else None
+        return str(temporary) if temporary else None

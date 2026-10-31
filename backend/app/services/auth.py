@@ -9,6 +9,7 @@ from app.core.rate_limit import LoginLimiter
 from app.core.security import (
     burn_password_check,
     create_access_token,
+    hash_password,
     hash_refresh_token,
     new_refresh_token,
     verify_password,
@@ -17,6 +18,7 @@ from app.models.user import User
 from app.repositories import users as repo
 from app.schemas.auth import PrincipalOut, TokenPair
 from app.services import audit
+from app.services import users as user_service
 
 logger = logging.getLogger("app.auth")
 
@@ -39,6 +41,19 @@ def principal_of(user: User) -> Principal:
         full_name=user.full_name,
         role=Role(user.role),
         departments=user.department_codes,
+        must_change_password=user.must_change_password,
+    )
+
+
+def principal_out(principal: Principal) -> PrincipalOut:
+    return PrincipalOut(
+        user_id=principal.user_id,
+        login_id=principal.login_id,
+        email=principal.email,
+        full_name=principal.full_name,
+        role=principal.role,
+        departments=sorted(principal.departments),
+        must_change_password=principal.must_change_password,
     )
 
 
@@ -53,14 +68,7 @@ def _issue(db: Session, user: User, settings: Settings) -> TokenPair:
         access_token=access.token,
         refresh_token=raw,
         expires_in=access.expires_in,
-        user=PrincipalOut(
-            user_id=principal.user_id,
-            login_id=principal.login_id,
-            email=principal.email,
-            full_name=principal.full_name,
-            role=principal.role,
-            departments=sorted(principal.departments),
-        ),
+        user=principal_out(principal),
     )
 
 
@@ -141,3 +149,46 @@ def logout(db: Session, raw_token: str) -> None:
         stored.revoked_at = datetime.now(UTC)
         db.commit()
         audit.record(db, "logout", "ok", user_id=stored.user_id)
+
+
+def change_password(
+    db: Session,
+    settings: Settings,
+    limiter: LoginLimiter,
+    principal: Principal,
+    *,
+    current_password: str,
+    new_password: str,
+) -> TokenPair:
+    """A signed-in person chooses a new password. This is also how a temporary password is
+    replaced. All their other sessions end and a fresh one is returned."""
+    user = repo.get(db, principal.user_id)
+    if user is None or not user.is_active:
+        raise AuthError("invalid_token")
+
+    # A stolen session must not be able to guess the current password without limit.
+    key = f"password-change|{user.id}"
+    if wait := limiter.retry_after(key):
+        audit.record(db, "password_change", "denied", user_id=user.id)
+        raise AuthError("too_many_attempts", status=429, retry_after=wait)
+    if not verify_password(current_password, user.password_hash):
+        limiter.record_failure(key)
+        audit.record(db, "password_change", "failed", user_id=user.id)
+        # 422, not 401: the app treats a 401 as "your session expired".
+        raise AuthError("current_password_incorrect", status=422)
+    limiter.reset(key)
+
+    try:
+        user_service.check_password(new_password, settings)
+    except user_service.UserError as exc:
+        raise AuthError(exc.reason, status=422) from exc
+    if verify_password(new_password, user.password_hash):
+        raise AuthError("password_unchanged", status=422)
+
+    user.password_hash = hash_password(new_password, settings.password_hash_cost_log2)
+    user.must_change_password = False
+    user.password_changed_at = datetime.now(UTC)
+    repo.revoke_all_refresh_tokens(db, user.id)
+    db.commit()
+    audit.record(db, "password_change", "ok", user_id=user.id)
+    return _issue(db, user, settings)
