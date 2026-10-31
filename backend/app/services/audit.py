@@ -19,6 +19,7 @@ def record(
     user_id: str | None = None,
     target_type: str | None = None,
     target_id: str | None = None,
+    detail: str | None = None,
 ) -> None:
     """Write one audit row and commit it on its own, so it survives even if the request that
     caused it later fails. Pass only ids and codes, never text from documents or questions."""
@@ -29,6 +30,7 @@ def record(
             outcome=outcome,
             target_type=target_type,
             target_id=target_id,
+            detail=detail,
         )
     )
     db.commit()

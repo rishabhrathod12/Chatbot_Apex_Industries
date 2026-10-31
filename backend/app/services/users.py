@@ -134,6 +134,19 @@ def _update_user(db: Session, actor: Principal, user: User, data: UserUpdate) ->
     if removes_an_admin and repo.count_active_super_admins(db, exclude_user_id=user.id) == 0:
         raise UserError("last_super_admin", status=409)
 
+    # What really changes, so the audit log can say "disabled" or "made Super Admin" instead of
+    # a vague "updated".
+    changes: list[tuple[str, str | None]] = []
+    if data.is_active is not None and data.is_active != user.is_active:
+        changes.append(("user_activate" if data.is_active else "user_deactivate", None))
+    if new_role.value != user.role:
+        changes.append(("user_role_change", f"role:{new_role.value}"))
+    new_codes = sorted(new_departments)
+    if new_codes != sorted(user.department_codes):
+        changes.append(("user_departments_change", ",".join(new_codes)[:64] or "none"))
+    if data.full_name is not None and data.full_name != user.full_name:
+        changes.append(("user_update", None))
+
     if data.full_name is not None:
         user.full_name = data.full_name
     user.role = new_role.value
@@ -144,9 +157,16 @@ def _update_user(db: Session, actor: Principal, user: User, data: UserUpdate) ->
         if not data.is_active:
             repo.revoke_all_refresh_tokens(db, user.id)
     db.commit()
-    audit.record(
-        db, "user_update", "ok", user_id=actor.user_id, target_type="user", target_id=user.id
-    )
+    for action, detail in changes:
+        audit.record(
+            db,
+            action,
+            "ok",
+            user_id=actor.user_id,
+            target_type="user",
+            target_id=user.id,
+            detail=detail,
+        )
     return user
 
 
