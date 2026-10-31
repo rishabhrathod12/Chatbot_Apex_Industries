@@ -77,6 +77,17 @@ and a verbatim quote) or a "not found" result, plus a `conversation_id`. Send th
 follow-up. `GET /api/v1/conversations` lists your conversations. It needs `OPENAI_API_KEY` (embeddings and chat). Retrieval quality on the
 sample documents: `python -m eval.run --provider openai --mode both`; compare answer settings with `python -m eval.compare` (see `docs/retrieval-baseline.md`).
 
+## RAGAS scoring (faithfulness, relevancy, context precision)
+
+Runs in a separate environment so it can't disturb the app's packages. Setup, cost and limits:
+`docs/ragas-evaluation.md`.
+
+```powershell
+py -3.12 -m venv .venv-eval
+.venv-eval\Scripts\python.exe -m pip install -e ".[eval]"
+.venv-eval\Scripts\python.exe -m eval.ragas_run --limit 5     # needs OPENAI_API_KEY
+```
+
 ## Quality checks
 
 ```powershell

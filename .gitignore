@@ -1,5 +1,7 @@
 # Environments
 .venv/
+.venv-eval/
+eval/results/
 apex/
 .env
 .env.*

@@ -21,7 +21,7 @@
 | M10 | PostgreSQL and enterprise document management | Not started |
 | M11 | Authentication, RBAC, department permissions | Done locally 2026-10-31. Security report: docs/security-test-report.md |
 | M12 | Hybrid search and reranking | Done locally 2026-10-31. Measured against M7: see docs/retrieval-baseline.md section 6 |
-| M13 | RAGAS evaluation | Not started |
+| M13 | RAGAS evaluation | Built and tested offline 2026-10-31 (separate `.venv-eval`). No real scores yet: needs OPENAI_API_KEY. See docs/ragas-evaluation.md |
 | M14 | Docker, deployment, monitoring, hardening | Not started |
 
 ## Environment facts (checked 2026-10-30)

@@ -22,6 +22,15 @@ frontend = [
     "streamlit>=1.40",
     "httpx>=0.27",
 ]
+# RAGAS evaluation (M13). Install in a SEPARATE venv (.venv-eval), never the app's: ragas pulls
+# in langchain and an older openai. The langchain pins keep ragas importable (checked 2026-10-31).
+eval = [
+    "ragas>=0.4,<0.5",
+    "langchain>=0.3,<1",
+    "langchain-core>=0.3,<1",
+    "langchain-community>=0.3,<0.4",
+    "langchain-openai>=0.3,<1",
+]
 dev = [
     "streamlit>=1.40",
     "pytest>=8.0",
@@ -63,6 +72,10 @@ explicit_package_bases = true
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Form"]
+
+[[tool.mypy.overrides]]
+module = ["ragas", "ragas.*", "langchain_openai", "langchain_openai.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["pymupdf", "pymupdf.*"]
