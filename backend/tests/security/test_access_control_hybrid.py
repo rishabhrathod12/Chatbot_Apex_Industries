@@ -10,7 +10,7 @@ from collections.abc import Iterator
 import pytest
 
 from app.core.config import get_settings
-from tests.integration.test_access_control_matrix import (
+from tests.security.test_access_control_matrix import (
     ALL,
     CAN_READ,
     CODE,

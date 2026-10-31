@@ -12,16 +12,7 @@ from fastapi.testclient import TestClient
 from app import main
 from app.api.health import API_LEVEL
 from app.core.config import Settings
-
-PUBLIC = {
-    ("GET", "/api/v1/health"),
-    ("GET", "/api/v1/health/ready"),  # for Docker/load balancers; says ok/failed only
-    ("GET", "/api/v1/auth/setup"),  # is the first account still missing?
-    ("POST", "/api/v1/auth/setup"),  # creates it; closed once any user exists (test_setup_api.py)
-    ("POST", "/api/v1/auth/login"),
-    ("POST", "/api/v1/auth/refresh"),
-    ("POST", "/api/v1/auth/logout"),
-}
+from tests.arena import PUBLIC
 
 
 def _routes(client: TestClient) -> list[tuple[str, str]]:

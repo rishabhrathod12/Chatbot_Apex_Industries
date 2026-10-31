@@ -6,7 +6,7 @@
 
 Scope: portals and Login IDs, temporary passwords, admin tools, company document archive and versions, old-conversation citations, and the employee and Super Admin workspaces, all attacked from the other side. Result of the full suite: **1145 passed, 4 skipped (Postgres), 2 expected failures (M6), 0 failed**, ruff and mypy clean. The sweep itself is 111 tests, about 50 seconds.
 
-Run it: `pytest -q backend/tests/integration/test_authorization_sweep.py backend/tests/integration/test_authorization_changes.py`
+Run it: `pytest -q backend/tests/security/test_authorization_sweep.py backend/tests/security/test_authorization_changes.py`
 
 ### What the sweep attacks
 
@@ -74,18 +74,18 @@ Three earlier-phase checks were repeated: archived documents readable by everyon
 Scope: login, roles, department permissions, personal privacy, and the audit trail.
 Result of the full suite at the time of writing: **672 passed, 2 expected failures, 0 failed** (about 2.5 minutes). The 2 expected failures are the offline-embedder retrieval misses from M6, unrelated to security.
 
-Run it yourself: `.venv\Scripts\pytest -q` (everything), or `pytest -q backend/tests/integration/test_access_control_matrix.py` (the permission matrix only).
+Run it yourself: `.venv\Scripts\pytest -q` (everything), or `pytest -q backend/tests/security/test_access_control_matrix.py` (the permission matrix only).
 
 ## 1. What was tested
 
 | Area | Tests | File |
 |---|---|---|
-| Passwords, tokens, rate limiter, permission rules | 45 | `unit/test_security_primitives.py` |
+| Passwords, tokens, rate limiter, permission rules | 45 | `security/test_security_primitives.py` |
 | Search filter: own departments, company-wide, narrowing, fail-closed | 8 | `integration/test_vectorstore_visibility.py` |
-| Login, lockout, expiry, refresh rotation and reuse, audit of logins | 36 | `integration/test_auth_api.py` |
-| **Access-control matrix**: 6 users x 5 documents | 120 | `integration/test_access_control_matrix.py` |
-| Uploading, deleting, personal privacy, conversation privacy, audit of refusals, user management, account tools | 52 | `integration/test_access_control_more.py` |
-| Every endpoint refuses unauthenticated requests | 5 | `integration/test_route_protection.py` |
+| Login, lockout, expiry, refresh rotation and reuse, audit of logins | 36 | `security/test_auth_api.py` |
+| **Access-control matrix**: 6 users x 5 documents | 120 | `security/test_access_control_matrix.py` |
+| Uploading, deleting, personal privacy, conversation privacy, audit of refusals, user management, account tools | 52 | `security/test_access_control_more.py` |
+| Every endpoint refuses unauthenticated requests | 5 | `security/test_route_protection.py` |
 | Interface: sign-in, sign-out, role-based pages and buttons, token renewal | 50 | `unit/test_frontend.py` |
 
 ## 2. The matrix (real users, real tokens, real indexed documents)

@@ -15,12 +15,22 @@ from app.core.config import Settings
 from app.core.permissions import Role
 from app.models import User
 from tests.conftest import SAMPLE_DOCS, ScriptedChat, add_user, login
-from tests.integration.test_route_protection import PUBLIC
 
 API = "/api/v1"
 FAKE_ID = "0" * 32
 
 # ---- every route, classified on purpose ------------------------------------------------------
+
+# Open to anyone, on purpose (enforced by security/test_route_protection.py).
+PUBLIC = {
+    ("GET", "/api/v1/health"),
+    ("GET", "/api/v1/health/ready"),  # for Docker/load balancers; says ok/failed only
+    ("GET", "/api/v1/auth/setup"),  # is the first account still missing?
+    ("POST", "/api/v1/auth/setup"),  # creates it; closed once any user exists (test_setup_api.py)
+    ("POST", "/api/v1/auth/login"),
+    ("POST", "/api/v1/auth/refresh"),
+    ("POST", "/api/v1/auth/logout"),
+}
 
 # Usable by someone who still has to choose a new password (besides the public ones).
 PENDING_OK = {("GET", "/api/v1/auth/me"), ("POST", "/api/v1/auth/change-password")}

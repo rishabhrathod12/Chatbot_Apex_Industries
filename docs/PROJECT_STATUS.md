@@ -47,7 +47,7 @@ Decisions made by default because they were not answered, all easy to change: de
 - Docker and PostgreSQL are **not installed**. An `OPENAI_API_KEY` is set in `.env` (never committed).
 - Database migrations: 8 (0001 to 0008), applied to the development database.
 - 6 sample PDFs in `data/sample_docs/` (fictional).
-- Test suite: 1145 passed, 4 skipped (Postgres), 2 xfailed (M6 offline-embedder misses), 1 deselected (live API). Ruff and mypy clean.
+- Test suite: 1168 passed, 4 skipped (Postgres), 2 xfailed (M6 offline-embedder misses), 1 deselected (live API). Ruff and mypy clean.
 
 ## Open decisions (need user approval)
 
@@ -75,3 +75,4 @@ See `docs/decisions/ADR-0001-initial-decisions.md`, section "Pending".
 - 2026-10-31: status file brought up to date (it still described the 2026-10-30 state with no code).
 - 2026-10-31: M13 run for real (first RAGAS baseline).
 - 2026-10-31: authentication and interface redesign, phases 1 to 8, pushed. Phase 9 (authorization sweep, documents) pushed too.
+- 2026-10-31: repository cleanup on branch `cleanup/structure` (phases 0 to 2): dead code removed, shared model helpers, the 14 security test files moved to `backend/tests/security/`. Behaviour unchanged; same 1168 tests pass.
