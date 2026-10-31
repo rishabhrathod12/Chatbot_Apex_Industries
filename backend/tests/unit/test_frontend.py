@@ -2,6 +2,7 @@
 and the pages themselves, driven with Streamlit's own test runner and a fake API (no server or
 browser needed)."""
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +77,20 @@ def test_login_stores_the_tokens_and_the_user() -> None:
     assert client.is_logged_in
     assert seen["url"] == "http://api.test/api/v1/auth/login"
     assert b"secret-password" in seen["body"]
+
+
+def test_login_sends_the_chosen_portal_only_when_there_is_one() -> None:
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.read()))
+        return httpx.Response(200, json=_pair(EMPLOYEE))
+
+    client = _client(handler, logged_in=False)
+    client.login("esha", "secret-password")
+    client.login("esha", "secret-password", portal="employee")
+    assert "portal" not in bodies[0]
+    assert bodies[1]["portal"] == "employee"
 
 
 def test_a_wrong_password_raises_and_does_not_log_in() -> None:

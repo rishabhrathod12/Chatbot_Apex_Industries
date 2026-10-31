@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, model_validator
 
@@ -37,6 +37,9 @@ class LoginRequest(BaseModel):
     login_id: str | None = Field(default=None, min_length=1, max_length=254)
     email: Email | None = None
     password: str = Field(min_length=1, max_length=256)
+    # Which sign-in page the person used. It can only make the server REFUSE a mismatch; it never
+    # grants anything. The role always comes from the database.
+    portal: Literal["employee", "admin"] | None = None
 
     @model_validator(mode="after")
     def _needs_an_identifier(self) -> "LoginRequest":

@@ -48,6 +48,7 @@ def login(
             identifier=body.identifier,
             password=body.password,
             client_address=request.client.host if request.client else "unknown",
+            portal=body.portal,
         )
     except auth_service.AuthError as exc:
         raise _as_http(exc) from exc

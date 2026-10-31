@@ -2,7 +2,7 @@ import re
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.user import RefreshToken, User, UserDepartment
@@ -46,6 +46,17 @@ def unique_login_id(db: Session, base: str) -> str:
         number += 1
         candidate = f"{stem}{number}"
     return candidate
+
+
+def count_active_super_admins(db: Session, exclude_user_id: str | None = None) -> int:
+    query = (
+        select(func.count())
+        .select_from(User)
+        .where(User.role == "super_admin", User.is_active.is_(True))
+    )
+    if exclude_user_id:
+        query = query.where(User.id != exclude_user_id)
+    return int(db.scalar(query) or 0)
 
 
 def any_user(db: Session) -> bool:

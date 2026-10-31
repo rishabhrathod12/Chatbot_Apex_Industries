@@ -58,9 +58,13 @@ class ApiClient:
     def _forget(self) -> None:
         self._access = self._refresh = self.user = None
 
-    def login(self, login_id: str, password: str) -> dict[str, Any]:
-        """`login_id` may be a Login ID or an email address."""
-        pair = self._send("POST", "/auth/login", json={"login_id": login_id, "password": password})
+    def login(self, login_id: str, password: str, portal: str | None = None) -> dict[str, Any]:
+        """`login_id` may be a Login ID or an email address. `portal` ("employee" or "admin") is
+        which sign-in page was used; the server only uses it to refuse a mismatch."""
+        body: dict[str, Any] = {"login_id": login_id, "password": password}
+        if portal:
+            body["portal"] = portal
+        pair = self._send("POST", "/auth/login", json=body)
         self._store(pair)
         assert self.user is not None
         return self.user

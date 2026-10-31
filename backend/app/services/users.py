@@ -1,5 +1,6 @@
 import re
 import secrets
+import threading
 
 from sqlalchemy.orm import Session
 
@@ -102,9 +103,18 @@ def create_account_for_employee(
     return user, (password if generated else None)
 
 
+_admin_lock = threading.Lock()  # one API process: two admins cannot remove each other at once
+
+
 def update_user(db: Session, actor: Principal, user: User, data: UserUpdate) -> User:
-    """Change a user. Admins cannot demote or disable themselves, so the company can never be
-    left without a working Super Admin by accident."""
+    """Change a user. The company can never be left without a working Super Admin: admins cannot
+    demote or disable themselves, and nobody can remove the last active Super Admin (this also
+    covers two admins removing each other at the same moment)."""
+    with _admin_lock:
+        return _update_user(db, actor, user, data)
+
+
+def _update_user(db: Session, actor: Principal, user: User, data: UserUpdate) -> User:
     if user.id == actor.user_id and (
         data.is_active is False or (data.role is not None and data.role is not Role.SUPER_ADMIN)
     ):
@@ -115,6 +125,14 @@ def update_user(db: Session, actor: Principal, user: User, data: UserUpdate) -> 
         data.departments if data.departments is not None else sorted(user.department_codes)
     )
     _check_departments(new_role, new_departments)
+
+    removes_an_admin = (
+        Role(user.role) is Role.SUPER_ADMIN
+        and user.is_active
+        and (data.is_active is False or new_role is not Role.SUPER_ADMIN)
+    )
+    if removes_an_admin and repo.count_active_super_admins(db, exclude_user_id=user.id) == 0:
+        raise UserError("last_super_admin", status=409)
 
     if data.full_name is not None:
         user.full_name = data.full_name

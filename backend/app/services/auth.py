@@ -33,6 +33,13 @@ class AuthError(Exception):
         self.retry_after = retry_after
 
 
+# Which accounts may use which sign-in page. Staff managers are staff: they use the employee page.
+PORTAL_ROLES: dict[str, frozenset[Role]] = {
+    "admin": frozenset({Role.SUPER_ADMIN}),
+    "employee": frozenset({Role.EMPLOYEE, Role.DEPARTMENT_MANAGER}),
+}
+
+
 def principal_of(user: User) -> Principal:
     return Principal(
         user_id=user.id,
@@ -80,6 +87,7 @@ def login(
     identifier: str,
     password: str,
     client_address: str,
+    portal: str | None = None,
 ) -> TokenPair:
     """Check a password and start a session.
 
@@ -109,6 +117,13 @@ def login(
             target_type="email",
             target_id=audit.fingerprint(identifier),
         )
+        raise AuthError("invalid_credentials")
+
+    if portal is not None and Role(user.role) not in PORTAL_ROLES[portal]:
+        # Right password, wrong door. Same answer, same lockout counting and same timing as a
+        # wrong password, so the page cannot be used to learn which accounts are admins.
+        limiter.record_failure(key)
+        audit.record(db, "login", "failed", user_id=user.id, target_type="portal", target_id=portal)
         raise AuthError("invalid_credentials")
 
     limiter.reset(key)

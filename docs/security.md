@@ -69,6 +69,11 @@ There is no built-in account and no default password. The first Super Admin is c
 - `POST /auth/change-password` needs the current password (wrong guesses count toward a lockout, answered 422 not 401 so the app does not mistake it for an expired session), refuses a too-short or unchanged password, ends all other sessions, and returns a new one. A reset also ends the person's sessions. Both are audited (`password_change`, `password_reset`) without secrets.
 - New Login IDs are made from the name (`Esha Production` becomes `esha.production`, numbered if taken) unless the admin picks one. Demo users from `seed-demo` are development-only and are not forced to change.
 
+### Sign-in portals and the last Super Admin
+
+- The sign-in page can send `portal: "employee" | "admin"`. The server compares it with the role stored in the database (admin page: Super Admin only; employee page: employees and department managers). A mismatch is refused with the same `401 invalid_credentials` as a wrong password, counts toward the lockout, and is audited (`login`/`failed`, target type `portal`). It is checked only after the password is correct. **The portal can only make the server refuse a login; it never grants a role.** Extra fields such as `role` in the request are ignored. Leaving `portal` out skips the check (older clients, scripts); it is not a way to gain access.
+- Nobody can disable or demote the last active Super Admin. Admins also cannot demote or disable themselves. The check and the change happen under one lock, so two admins removing each other at the same moment cannot leave the company with none (`409 last_super_admin`).
+
 ## 6. Known limits
 
 - **The login limiter is in memory**, so it works for one API process. With several processes it needs a shared store (M14).

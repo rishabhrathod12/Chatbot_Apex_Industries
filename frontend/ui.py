@@ -46,6 +46,7 @@ _ERROR_TEXT = {
     "user_not_found": "That user no longer exists.",
     "current_password_incorrect": "The current password is not correct.",
     "password_unchanged": "Choose a password different from the current one.",
+    "last_super_admin": "There must always be at least one active Super Admin.",
     "password_required": "Please enter a password.",
     "login_id_taken": "That Login ID is already used.",
     "password_change_required": "Please choose a new password first.",
