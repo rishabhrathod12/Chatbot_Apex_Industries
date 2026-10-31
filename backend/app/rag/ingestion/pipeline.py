@@ -52,8 +52,8 @@ def ingest_document(
     vectors again, so a document is either fully indexed or not searchable at all.
     """
     document = repo.get(db, document_id)
-    if document is None:
-        return
+    if document is None or document.status == "archived":
+        return  # gone, or taken out of use while this was waiting in the queue
 
     started = time.perf_counter()
     document.status = "processing"
@@ -73,6 +73,8 @@ def ingest_document(
             source_name=document.original_filename,
             department=document.department,
             visibility=_visibility(document),
+            doc_version=document.version_override,
+            doc_title=document.title_override,
         )
         chunker = SectionChunker(settings.chunk_max_tokens, settings.chunk_overlap_tokens)
         chunks = chunker.chunk(extracted, context)
@@ -92,7 +94,7 @@ def ingest_document(
         document.chunk_count = len(chunks)
         document.page_count = len(extracted.pages) if document.file_ext == ".pdf" else None
         document.doc_code = extracted.metadata.doc_code
-        document.title = extracted.metadata.title
+        document.title = document.title_override or extracted.metadata.title
         document.doc_version = chunks[0].doc_version
         db.commit()
         logger.info(

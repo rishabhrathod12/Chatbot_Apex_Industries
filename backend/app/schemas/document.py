@@ -20,6 +20,10 @@ class DocumentOut(BaseModel):
     page_count: int | None = None
     doc_code: str | None = None
     title: str | None = None
+    doc_version: str | None = None
+    description: str | None = None
+    document_type: str | None = None
+    archived_at: datetime | None = None
     created_at: datetime
 
 

@@ -15,6 +15,7 @@ class DocumentContext(BaseModel):
     department: str = ""  # canonical code, empty for personal documents
     visibility: Literal["personal", "department", "company"] = "department"
     doc_version: str | None = None  # falls back to the version in the cover-page metadata
+    doc_title: str | None = None  # falls back to the title in the cover-page metadata
 
 
 class Chunk(BaseModel):

@@ -26,9 +26,13 @@ def list_visible(db: Session, principal: Principal) -> list[Document]:
     if principal.is_admin:
         allowed = or_(Document.scope == "enterprise", own_personal)
     else:
+        in_use = Document.status != "archived"
+        if principal.is_manager:  # managers still see their own departments' archived documents
+            in_use = or_(in_use, Document.department.in_(principal.departments))
         company = and_(
             Document.scope == "enterprise",
             or_(Document.visibility == "company", Document.department.in_(principal.departments)),
+            in_use,
         )
         allowed = or_(company, own_personal)
     return list(
@@ -56,6 +60,21 @@ def find_duplicate(db: Session, dedupe_key: str, file_hash: str) -> Document | N
             Document.deleted_at.is_(None),
         )
     ).first()
+
+
+def archive(db: Session, document: Document) -> None:
+    document.status = "archived"
+    document.status_reason = None
+    document.chunk_count = 0
+    document.archived_at = datetime.now(UTC)
+    db.commit()
+
+
+def unarchive(db: Session, document: Document) -> None:
+    """Back to the start of the pipeline: the caller queues the indexing."""
+    document.status = "uploaded"
+    document.archived_at = None
+    db.commit()
 
 
 def soft_delete(db: Session, document: Document) -> None:

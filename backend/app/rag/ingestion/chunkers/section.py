@@ -142,7 +142,7 @@ class SectionChunker:
                         page_start=min(pages) if pages else None,
                         page_end=max(pages) if pages else None,
                         doc_code=meta.doc_code,
-                        doc_title=meta.title,
+                        doc_title=context.doc_title or meta.title,
                         doc_version=version,
                         scope=context.scope,
                         department=context.department,

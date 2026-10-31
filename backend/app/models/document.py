@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Index, Integer, String, text
+from sqlalchemy import DateTime, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -47,7 +47,8 @@ class Document(Base):
     mime_type: Mapped[str] = mapped_column(String(128))
     size_bytes: Mapped[int] = mapped_column(Integer)
     file_hash: Mapped[str] = mapped_column(String(64))
-    # uploaded -> processing -> ready | failed (deleted rows are soft-deleted, see deleted_at)
+    # uploaded -> processing -> ready | failed, or archived (company documents taken out of use:
+    # no vectors, not searchable). Deleted rows are soft-deleted, see deleted_at.
     status: Mapped[str] = mapped_column(String(16), default="uploaded")
     status_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -55,5 +56,12 @@ class Document(Base):
     doc_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     doc_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Typed by a Super Admin at upload. Kept apart from title / doc_version, which are read from
+    # the file, so that re-indexing never overwrites them.
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    document_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    title_override: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    version_override: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

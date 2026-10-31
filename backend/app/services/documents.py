@@ -52,6 +52,10 @@ def store_upload(
     department: str,
     visibility: str,
     settings: Settings,
+    title: str | None = None,
+    description: str | None = None,
+    document_type: str | None = None,
+    version: str | None = None,
 ) -> UploadResult:
     filename = sanitize_filename(upload.filename)
     upload_dir = Path(settings.upload_dir)
@@ -88,6 +92,10 @@ def store_upload(
             mime_type=MIME_TYPES[ext],
             size_bytes=size,
             file_hash=file_hash,
+            title_override=title,
+            description=description,
+            document_type=document_type,
+            version_override=version,
         )
         try:
             repo.add(db, document)

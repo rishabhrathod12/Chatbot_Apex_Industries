@@ -18,8 +18,9 @@ class DepartmentSummary(BaseModel):
 
 
 class DocumentCounts(BaseModel):
-    total: int  # company documents only; personal documents are never counted here
-    by_status: dict[str, int]
+    total: int  # company documents in use; personal documents are never counted here
+    archived: int  # company documents taken out of use
+    by_status: dict[str, int]  # in-use documents only
 
 
 class RecentUpload(BaseModel):

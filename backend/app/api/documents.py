@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Annotated, Literal
 
 from fastapi import (
@@ -16,6 +17,7 @@ from app.api.deps import get_current_principal, get_embedder_provider, get_store
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.core.departments import canonical_department
+from app.core.document_types import DOCUMENT_TYPES
 from app.core.permissions import (
     Principal,
     can_add_company_document,
@@ -65,6 +67,29 @@ def _manageable_or_403(db: Session, principal: Principal, document: Document, ac
         raise HTTPException(status_code=403, detail="not_allowed")
 
 
+_VERSION = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
+
+
+def _clean_metadata(
+    title: str | None, description: str | None, document_type: str | None, version: str | None
+) -> dict[str, str]:
+    """The details a Super Admin types for a company document. Blank means "not given"."""
+    given = {
+        "title": (title or "").strip(),
+        "description": (description or "").strip(),
+        "document_type": (document_type or "").strip().lower(),
+        "version": (version or "").strip(),
+    }
+    given = {k: v for k, v in given.items() if v}
+    if len(given.get("title", "")) > 255 or len(given.get("description", "")) > 2000:
+        raise HTTPException(status_code=422, detail="metadata_too_long")
+    if "document_type" in given and given["document_type"] not in DOCUMENT_TYPES:
+        raise HTTPException(status_code=422, detail="invalid_document_type")
+    if "version" in given and not _VERSION.match(given["version"]):
+        raise HTTPException(status_code=422, detail="invalid_version")
+    return given
+
+
 @router.post("", response_model=UploadResponse)
 def upload_documents(
     response: Response,
@@ -73,6 +98,10 @@ def upload_documents(
     scope: Annotated[Literal["personal", "enterprise"], Form()],
     department: Annotated[str | None, Form()] = None,
     visibility: Annotated[Literal["department", "company"], Form()] = "department",
+    title: Annotated[str | None, Form()] = None,
+    description: Annotated[str | None, Form()] = None,
+    document_type: Annotated[str | None, Form()] = None,
+    version: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     embedder_provider: EmbedderProvider = Depends(get_embedder_provider),
@@ -83,6 +112,12 @@ def upload_documents(
         raise HTTPException(status_code=422, detail="no_files")
     if len(files) > settings.max_files_per_request:
         raise HTTPException(status_code=400, detail="too_many_files")
+
+    metadata = _clean_metadata(title, description, document_type, version)
+    if metadata and scope != "enterprise":
+        raise HTTPException(status_code=422, detail="metadata_for_company_documents_only")
+    if (metadata.get("title") or metadata.get("version")) and len(files) > 1:
+        raise HTTPException(status_code=422, detail="title_and_version_need_a_single_file")
 
     if scope == "enterprise":
         dept = canonical_department(department)
@@ -112,6 +147,7 @@ def upload_documents(
             department=dept,
             visibility=stored_visibility,
             settings=settings,
+            **metadata,
         )
         for f in files
     ]
@@ -167,12 +203,81 @@ def reindex_document(
 ) -> DocumentOut:
     document = _visible_or_404(db, principal, document_id)
     _manageable_or_403(db, principal, document, "document_reindex")
+    if document.status == "archived":
+        raise HTTPException(status_code=409, detail="archived_restore_it_first")
     if document.status == "processing":
         raise HTTPException(status_code=409, detail="already_processing")
     background.add_task(run_ingestion, document.id, settings, embedder_provider, store_provider)
     audit.record(
         db,
         "document_reindex",
+        "ok",
+        user_id=principal.user_id,
+        target_type="document",
+        target_id=document.id,
+    )
+    return DocumentOut.model_validate(document)
+
+
+@router.post("/{document_id}/archive", response_model=DocumentOut)
+def archive_document(
+    document_id: str,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    store_provider: StoreProvider = Depends(get_store_provider),
+    principal: Principal = Depends(get_current_principal),
+) -> DocumentOut:
+    """Take a company document out of use. Its vectors are removed first, so it can no longer be
+    searched or cited; the file and its details are kept so it can be restored."""
+    document = _visible_or_404(db, principal, document_id)
+    _manageable_or_403(db, principal, document, "document_archive")
+    if document.scope != "enterprise":
+        raise HTTPException(status_code=409, detail="only_company_documents_can_be_archived")
+    if document.status == "archived":
+        return DocumentOut.model_validate(document)
+    if document.status in {"uploaded", "processing"}:
+        raise HTTPException(status_code=409, detail="still_processing")
+
+    try:
+        store_provider("enterprise", embedding_dimensions(settings)).delete_document(document.id)
+    except Exception as exc:
+        logger.exception("vector delete failed", extra={"document_id": document.id})
+        raise HTTPException(status_code=500, detail="vector_delete_failed") from exc
+
+    repo.archive(db, document)
+    audit.record(
+        db,
+        "document_archive",
+        "ok",
+        user_id=principal.user_id,
+        target_type="document",
+        target_id=document.id,
+    )
+    return DocumentOut.model_validate(document)
+
+
+@router.post("/{document_id}/restore", response_model=DocumentOut, status_code=202)
+def restore_document(
+    document_id: str,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    embedder_provider: EmbedderProvider = Depends(get_embedder_provider),
+    store_provider: StoreProvider = Depends(get_store_provider),
+    principal: Principal = Depends(get_current_principal),
+) -> DocumentOut:
+    """Bring an archived company document back: it is indexed again and becomes searchable
+    once it shows as ready."""
+    document = _visible_or_404(db, principal, document_id)
+    _manageable_or_403(db, principal, document, "document_restore")
+    if document.status != "archived":
+        raise HTTPException(status_code=409, detail="not_archived")
+
+    repo.unarchive(db, document)
+    background.add_task(run_ingestion, document.id, settings, embedder_provider, store_provider)
+    audit.record(
+        db,
+        "document_restore",
         "ok",
         user_id=principal.user_id,
         target_type="document",

@@ -57,6 +57,9 @@ class Principal:
 def can_read_document(principal: Principal, document: Document) -> bool:
     if document.scope == "personal":
         return document.owner_id == principal.user_id
+    if document.status == "archived":
+        # Taken out of use: only the people who look after it still see it (to restore it).
+        return can_manage_document(principal, document)
     return (
         principal.is_admin
         or document.visibility == "company"

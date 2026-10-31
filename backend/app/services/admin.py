@@ -174,7 +174,23 @@ def stats(db: Session) -> StatsOut:
     ):
         members[(department, role)] = count
 
-    company = (Document.scope == "enterprise", Document.deleted_at.is_(None))
+    company = (
+        Document.scope == "enterprise",
+        Document.deleted_at.is_(None),
+        Document.status != "archived",
+    )
+    archived = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Document)
+            .where(
+                Document.scope == "enterprise",
+                Document.deleted_at.is_(None),
+                Document.status == "archived",
+            )
+        )
+        or 0
+    )
     count_by_department = (
         select(Document.department, func.count()).where(*company).group_by(Document.department)
     )
@@ -206,7 +222,9 @@ def stats(db: Session) -> StatsOut:
             )
             for code in DEPARTMENTS
         ],
-        documents=DocumentCounts(total=sum(by_status.values()), by_status=by_status),
+        documents=DocumentCounts(
+            total=sum(by_status.values()), archived=archived, by_status=by_status
+        ),
         recent_uploads=[
             RecentUpload(
                 document_id=d.id,
