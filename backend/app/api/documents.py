@@ -26,7 +26,13 @@ from app.core.permissions import (
 )
 from app.models.document import Document
 from app.rag.ingestion.embedder import embedding_dimensions
-from app.rag.ingestion.pipeline import EmbedderProvider, Scope, StoreProvider, run_ingestion
+from app.rag.ingestion.pipeline import (
+    EmbedderProvider,
+    Scope,
+    StoreProvider,
+    replace_document,
+    run_ingestion,
+)
 from app.repositories import documents as repo
 from app.schemas.document import DocumentOut, UploadResponse
 from app.services import audit
@@ -217,6 +223,103 @@ def reindex_document(
         target_id=document.id,
     )
     return DocumentOut.model_validate(document)
+
+
+@router.post("/{document_id}/versions", response_model=DocumentOut, status_code=202)
+def upload_new_version(
+    document_id: str,
+    file: UploadFile,
+    background: BackgroundTasks,
+    title: Annotated[str | None, Form()] = None,
+    description: Annotated[str | None, Form()] = None,
+    document_type: Annotated[str | None, Form()] = None,
+    version: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    embedder_provider: EmbedderProvider = Depends(get_embedder_provider),
+    store_provider: StoreProvider = Depends(get_store_provider),
+    principal: Principal = Depends(get_current_principal),
+) -> DocumentOut:
+    """Replace a company document with a new file. The new version is indexed in the background;
+    the old one stays searchable until the new one is ready, then is archived (never a moment
+    with neither). If the new file cannot be indexed the old one stays as it was."""
+    old = _visible_or_404(db, principal, document_id)
+    _manageable_or_403(db, principal, old, "document_version_upload")
+    if old.scope != "enterprise":
+        raise HTTPException(status_code=409, detail="only_company_documents_have_versions")
+    if old.status == "archived":
+        raise HTTPException(status_code=409, detail="archived_restore_it_first")
+    if old.status in {"uploaded", "processing"} or repo.replacement_in_progress(db, old):
+        raise HTTPException(status_code=409, detail="still_processing")
+
+    given = _clean_metadata(title, description, document_type, version)
+    if given.get("version") and given["version"] == (old.version_override or old.doc_version):
+        raise HTTPException(status_code=422, detail="same_version")
+    details = {
+        "title": given.get("title") or old.title_override,
+        "description": given.get("description") or old.description,
+        "document_type": given.get("document_type") or old.document_type,
+        "version": given.get("version"),  # the old version's label is not inherited
+    }
+
+    result = service.store_upload(
+        db,
+        file,
+        scope="enterprise",
+        owner_id=principal.user_id,
+        department=old.department,
+        visibility=old.visibility,
+        settings=settings,
+        **details,
+    )
+    if result.status == "duplicate":
+        same = result.document is not None and result.document.id == old.id
+        raise HTTPException(
+            status_code=409, detail="same_file" if same else "duplicate_of_another_document"
+        )
+    if result.status == "rejected" or result.document is None:
+        status = 413 if result.reason == "file_too_large" else 422
+        raise HTTPException(status_code=status, detail=result.reason or "rejected")
+
+    new = repo.get(db, result.document.id)
+    assert new is not None
+    new.supersedes_id = old.id
+    db.commit()
+    audit.record(
+        db,
+        "document_version_upload",
+        "ok",
+        user_id=principal.user_id,
+        target_type="document",
+        target_id=new.id,
+        detail=f"replaces:{old.id}",
+    )
+    background.add_task(
+        replace_document,
+        new.id,
+        old.id,
+        principal.user_id,
+        settings,
+        embedder_provider,
+        store_provider,
+    )
+    return DocumentOut.model_validate(new)
+
+
+@router.get("/{document_id}/versions", response_model=list[DocumentOut])
+def list_versions(
+    document_id: str,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_current_principal),
+) -> list[DocumentOut]:
+    """This document and the versions before and after it, newest first. Versions the user is
+    not allowed to see (such as archived ones, for an employee) are left out."""
+    document = _visible_or_404(db, principal, document_id)
+    return [
+        DocumentOut.model_validate(d)
+        for d in repo.version_chain(db, document)
+        if can_read_document(principal, d)
+    ]
 
 
 @router.post("/{document_id}/archive", response_model=DocumentOut)

@@ -944,3 +944,29 @@ def test_the_generated_password_is_shown_once_after_creating_a_user(
     assert any(c.value == "Gen3rated-Temp-Pass" for c in app.code)
     app.run()  # any later interaction: the password is gone
     assert not any(c.value == "Gen3rated-Temp-Pass" for c in app.code)
+
+
+def test_a_source_the_person_can_no_longer_read_shows_a_plain_notice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gone = {
+        "number": 2,
+        "chunk_id": "",
+        "doc_code": "",
+        "doc_title": "",
+        "source_name": "",
+        "section_title": "",
+        "quote": "",
+        "available": False,
+    }
+
+    class WithGoneSource(FakeApi):
+        def get_conversation(self, conversation_id: str) -> dict[str, Any]:
+            answer = {**ANSWER, "sources": [*ANSWER["sources"], gone]}  # type: ignore[dict-item]
+            return {"id": conversation_id, "title": "t", "messages": [QUESTION, answer]}
+
+    app = _run(monkeypatch, WithGoneSource(), select_conversation=True)
+    assert not app.exception
+    text = _all_text(app)
+    assert "no longer available to you" in text
+    assert "APM-HSE-MAN-003" in text  # the readable source is still shown

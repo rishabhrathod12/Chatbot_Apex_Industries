@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user_id
+from app.api.deps import get_current_principal, get_current_user_id
 from app.core.database import get_db
+from app.core.permissions import Principal
 from app.models.conversation import Conversation
 from app.repositories import conversations as repo
 from app.schemas.chat import ConversationDetail, ConversationOut, MessageOut
+from app.services import chat as chat_service
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -32,9 +34,12 @@ def list_conversations(
 def get_conversation(
     conversation_id: str,
     db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user_id),
+    principal: Principal = Depends(get_current_principal),
 ) -> ConversationDetail:
-    conversation = _owned_or_404(db, conversation_id, user_id)
+    conversation = _owned_or_404(db, conversation_id, principal.user_id)
+    shown = chat_service.redact_unreadable_sources(
+        db, principal, [repo.sources_of(m) for m in conversation.messages]
+    )
     messages = [
         MessageOut(
             id=m.id,
@@ -42,11 +47,11 @@ def get_conversation(
             content=m.content,
             status=m.status,
             reason=m.reason,
-            sources=repo.sources_of(m),
+            sources=sources,
             rewritten_question=m.rewritten_question,
             created_at=m.created_at,
         )
-        for m in conversation.messages
+        for m, sources in zip(conversation.messages, shown, strict=True)
     ]
     return ConversationDetail(
         id=conversation.id,

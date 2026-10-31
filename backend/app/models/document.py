@@ -20,6 +20,7 @@ def _now() -> datetime:
 class Document(Base):
     __tablename__ = "documents"
     __table_args__ = (
+        Index("ix_documents_supersedes", "supersedes_id"),
         # One live copy of a file per dedupe_key. Soft-deleted rows don't block re-upload.
         Index(
             "uq_documents_dedupe",
@@ -63,5 +64,7 @@ class Document(Base):
     title_override: Mapped[str | None] = mapped_column(String(255), nullable=True)
     version_override: Mapped[str | None] = mapped_column(String(32), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The earlier version this document replaces (company documents only).
+    supersedes_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

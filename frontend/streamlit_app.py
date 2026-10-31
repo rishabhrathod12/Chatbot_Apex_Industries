@@ -259,6 +259,11 @@ def conversation_list() -> None:
 def render_sources(sources: list[dict[str, Any]]) -> None:
     with st.expander(f"Sources ({len(sources)})", expanded=False):
         for source in sources:
+            if source.get("available") is False:
+                st.markdown(
+                    f"**[{source['number']}]** _This source is no longer available to you._"
+                )
+                continue
             st.markdown(f"**[{source['number']}]** {ui.escape_markdown(ui.source_title(source))}")
             if source.get("doc_code"):
                 st.caption(f"{source['doc_code']} · {source.get('source_name', '')}")

@@ -24,6 +24,7 @@ class DocumentOut(BaseModel):
     description: str | None = None
     document_type: str | None = None
     archived_at: datetime | None = None
+    supersedes_id: str | None = None
     created_at: datetime
 
 

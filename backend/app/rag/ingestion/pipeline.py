@@ -15,6 +15,7 @@ from app.rag.ingestion.extractors import ExtractionError, extract
 from app.rag.vectorstore import VectorStore, VectorStoreError
 from app.repositories import documents as repo
 from app.schemas.chunk import DocumentContext
+from app.services import audit
 
 logger = logging.getLogger("app.ingestion")
 
@@ -121,6 +122,68 @@ def _cleanup(store: VectorStore | None, document_id: str) -> None:
         store.delete_document(document_id)
     except Exception:
         logger.exception("cleanup of vectors failed", extra={"document_id": document_id})
+
+
+def replace_document(
+    new_id: str,
+    old_id: str,
+    actor_id: str,
+    settings: Settings,
+    embedder_provider: EmbedderProvider,
+    store_provider: StoreProvider,
+) -> None:
+    """Index a new version, and only once it is ready take the old one out of use.
+
+    The old version stays searchable until the new one is, so there is never a moment when
+    neither can be found. If the new one fails to index, the old one simply stays as it was.
+    """
+    with get_session_factory(settings.database_url)() as db:
+        ingest_document(
+            db,
+            new_id,
+            settings=settings,
+            embedder_provider=embedder_provider,
+            store_provider=store_provider,
+        )
+        new, old = repo.get(db, new_id), repo.get(db, old_id)
+        if new is None or old is None:
+            return
+        if new.status != "ready":
+            audit.record(
+                db,
+                "document_version_replace",
+                "failed",
+                user_id=actor_id,
+                target_type="document",
+                target_id=new.id,
+                detail=new.status_reason,
+            )
+            return
+        if old.status != "archived":
+            try:
+                store_provider("enterprise", embedder_provider().dimensions).delete_document(old.id)
+            except Exception:
+                logger.exception("could not remove the old version", extra={"document_id": old.id})
+                audit.record(
+                    db,
+                    "document_version_replace",
+                    "failed",
+                    user_id=actor_id,
+                    target_type="document",
+                    target_id=new.id,
+                    detail="old_version_kept",
+                )
+                return  # both stay searchable rather than risk losing the old one
+            repo.archive(db, old)
+        audit.record(
+            db,
+            "document_version_replace",
+            "ok",
+            user_id=actor_id,
+            target_type="document",
+            target_id=new.id,
+            detail=f"replaces:{old.id}",
+        )
 
 
 def run_ingestion(

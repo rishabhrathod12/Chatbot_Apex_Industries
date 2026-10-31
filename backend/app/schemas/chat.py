@@ -17,6 +17,9 @@ class Source(BaseModel):
     page_end: int | None = None
     # A sentence copied word for word from the cited chunk, so it can be checked against the page.
     quote: str = ""
+    # False in an old conversation when the person can no longer read that document (it was
+    # archived, deleted or moved out of their reach). All the other fields are then blank.
+    available: bool = True
 
 
 class ChatAnswer(BaseModel):

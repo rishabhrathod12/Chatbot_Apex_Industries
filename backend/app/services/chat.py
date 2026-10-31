@@ -1,13 +1,16 @@
 import logging
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.core.permissions import Principal, can_read_document
+from app.models.document import Document
 from app.rag.generation import ChatModel, HistoryTurn, answer_question, condense_question
 from app.rag.ingestion.embedder import Embedder
 from app.rag.vectorstore import SearchFilter, VectorStore
 from app.repositories import conversations as repo
-from app.schemas.chat import ChatAnswer
+from app.schemas.chat import ChatAnswer, Source
 
 logger = logging.getLogger("app.chat")
 
@@ -94,3 +97,36 @@ def chat(
             "rewritten_question": rewritten,
         }
     )
+
+
+def redact_unreadable_sources(
+    db: Session, principal: Principal, per_message: list[list[Source]]
+) -> list[list[Source]]:
+    """Old answers keep their citations, but a citation to a document the person can no longer
+    read (archived, deleted, moved out of their department) is replaced by a blank placeholder:
+    no title, no section, no quote. The [n] numbers in the answer text still line up.
+    """
+    ids = {s.chunk_id.split(":", 1)[0] for sources in per_message for s in sources}
+    readable: set[str] = set()
+    if ids:
+        documents = db.scalars(
+            select(Document).where(Document.id.in_(ids), Document.deleted_at.is_(None))
+        )
+        readable = {d.id for d in documents if can_read_document(principal, d)}
+    return [
+        [
+            s
+            if s.chunk_id.split(":", 1)[0] in readable
+            else Source(
+                number=s.number,
+                chunk_id="",
+                doc_code="",
+                doc_title="",
+                source_name="",
+                section_title="",
+                available=False,
+            )
+            for s in sources
+        ]
+        for sources in per_message
+    ]

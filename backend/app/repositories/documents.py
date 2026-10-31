@@ -62,6 +62,47 @@ def find_duplicate(db: Session, dedupe_key: str, file_hash: str) -> Document | N
     ).first()
 
 
+def version_chain(db: Session, document: Document, limit: int = 50) -> list[Document]:
+    """This document with the versions before and after it, newest first. Follows the links
+    in both directions; a version that was deleted ends the chain there."""
+    chain = [document]
+    seen = {document.id}
+    current = document
+    while current.supersedes_id and len(chain) < limit:  # earlier versions
+        previous = get(db, current.supersedes_id)
+        if previous is None or previous.id in seen:
+            break
+        chain.append(previous)
+        seen.add(previous.id)
+        current = previous
+    current = document
+    while len(chain) < limit:  # later versions
+        later = db.scalars(
+            select(Document).where(
+                Document.supersedes_id == current.id, Document.deleted_at.is_(None)
+            )
+        ).first()
+        if later is None or later.id in seen:
+            break
+        chain.append(later)
+        seen.add(later.id)
+        current = later
+    return sorted(chain, key=lambda d: d.created_at, reverse=True)
+
+
+def replacement_in_progress(db: Session, document: Document) -> bool:
+    return (
+        db.scalars(
+            select(Document.id).where(
+                Document.supersedes_id == document.id,
+                Document.deleted_at.is_(None),
+                Document.status.in_(["uploaded", "processing"]),
+            )
+        ).first()
+        is not None
+    )
+
+
 def archive(db: Session, document: Document) -> None:
     document.status = "archived"
     document.status_reason = None
