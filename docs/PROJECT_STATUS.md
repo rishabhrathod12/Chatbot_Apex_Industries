@@ -17,7 +17,7 @@
 | M6 | Embeddings and vector store integration (Qdrant, see ADR-0005) | Done, pushed |
 | M7 | Basic RAG + first golden set | Done, pushed. Verified with real embeddings and `gpt-4.1-mini`; known weakness on near-miss questions, see `docs/retrieval-baseline.md` |
 | M8 | Citations and conversational memory | Done, pushed. Follow-ups resolved 3/3 with the real model |
-| M9 | Streamlit frontend | Chat, sources, conversations, documents and login work. **Not yet:** polish for phones, accessibility review |
+| M9 | Streamlit frontend | Chat, sources, conversations, documents and login work, plus a first-time setup form that creates the first Super Admin (open only while no user exists). **Not yet:** polish for phones, accessibility review |
 | M10 | PostgreSQL support | Scope chosen: Postgres migration only (no versions, recycle bin or library filters). Code and tests written, **not verified on a real PostgreSQL** (none installed). The 4 Postgres tests are skipped until `TEST_POSTGRES_URL` is set. See `docs/postgres-setup.md` |
 | M11 | Authentication, RBAC, department permissions | Done, pushed. Security report: `docs/security-test-report.md` |
 | M12 | Hybrid search and reranking | Done, pushed. Measured against M7: `docs/retrieval-baseline.md` section 6 |

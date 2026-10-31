@@ -366,9 +366,9 @@ DOCUMENT = {
     "created_at": "x",
 }
 PEOPLE = [
-    {**ADMIN, "id": "u-admin", "is_active": True, "created_at": "x"},
-    {**EMPLOYEE, "id": "u-emp", "is_active": True, "created_at": "x"},
-    {**MANAGER, "id": "u-off", "is_active": False, "created_at": "x"},
+    {**ADMIN, "id": "u-admin", "login_id": "admin", "is_active": True, "created_at": "x"},
+    {**EMPLOYEE, "id": "u-emp", "login_id": "esha", "is_active": True, "created_at": "x"},
+    {**MANAGER, "id": "u-off", "login_id": "sana", "is_active": False, "created_at": "x"},
 ]
 
 
@@ -400,6 +400,13 @@ class FakeApi:
         self.login_error: ApiError | None = None
         self.chat_error: ApiError | None = None
         self.logged_out = False
+        self.setup_state: dict[str, bool] = {
+            "setup_required": False,
+            "token_required": False,
+            "available": True,
+        }
+        self.setup_error: ApiError | None = None
+        self.setup_calls: list[tuple[str, str, str, str]] = []
         self.created: list[tuple[Any, ...]] = []
         self.updated: list[tuple[str, dict[str, Any]]] = []
 
@@ -412,6 +419,14 @@ class FakeApi:
             raise self.login_error
         self.user, self.is_logged_in = EMPLOYEE, True
         return EMPLOYEE
+
+    def setup_status(self) -> dict[str, Any]:
+        return self.setup_state
+
+    def setup(self, email: str, full_name: str, password: str, token: str = "") -> None:
+        self.setup_calls.append((email, full_name, password, token))
+        if self.setup_error:
+            raise self.setup_error
 
     def logout(self) -> None:
         self.logged_out = True
@@ -491,7 +506,7 @@ def _all_text(app: AppTest) -> str:
 def test_signed_out_visitors_see_only_the_sign_in_form(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _run(monkeypatch, FakeApi(user=None))
     assert not app.exception
-    assert [t.label for t in app.text_input] == ["Email", "Password"]
+    assert [t.label for t in app.text_input] == ["Login ID or email", "Password"]
     assert not app.chat_input
     assert not app.sidebar.radio  # no navigation before signing in
     assert "no self sign-up" in _all_text(app)
@@ -537,7 +552,7 @@ def test_signing_out_returns_to_the_sign_in_form(monkeypatch: pytest.MonkeyPatch
     app = _run(monkeypatch, fake)
     next(b for b in app.sidebar.button if b.label == "Sign out").click().run()
     assert fake.logged_out
-    assert [t.label for t in app.text_input] == ["Email", "Password"]
+    assert [t.label for t in app.text_input] == ["Login ID or email", "Password"]
 
 
 def test_the_sidebar_shows_who_is_signed_in(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -724,3 +739,105 @@ def test_a_link_to_the_users_page_is_ignored_for_non_admins(
     app.query_params["page"] = "users"
     app.run()
     assert app.title[0].value == "Ask the documents"
+
+
+# ---- first-time setup ----
+
+
+def _needs_setup(**state: bool) -> FakeApi:
+    fake = FakeApi(user=None)
+    fake.setup_state = {
+        "setup_required": True,
+        "token_required": False,
+        "available": True,
+        **state,
+    }
+    return fake
+
+
+def _fill_setup(
+    app: AppTest, password: str = "a-long-password-1", repeat: str | None = None
+) -> None:
+    app.text_input[0].set_value("The Boss")
+    app.text_input[1].set_value("boss@apex.test")
+    app.text_input[2].set_value(password)
+    app.text_input[3].set_value(password if repeat is None else repeat)
+
+
+def test_when_no_account_exists_the_setup_form_replaces_sign_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _run(monkeypatch, _needs_setup())
+    assert not app.exception
+    assert [t.label for t in app.text_input] == [
+        "Full name",
+        "Email",
+        "Password",
+        "Repeat password",
+    ]
+    assert "First-time setup" in [s.value for s in app.subheader]
+    assert "no self sign-up" not in _all_text(app)
+
+
+def test_the_setup_token_field_appears_only_when_one_is_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _run(monkeypatch, _needs_setup(token_required=True))
+    assert [t.label for t in app.text_input][-1] == "Setup token"
+
+
+def test_creating_the_first_account_signs_the_person_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _needs_setup()
+    app = _run(monkeypatch, fake)
+    _fill_setup(app)
+    app.button[0].click().run()
+    assert fake.setup_calls == [("boss@apex.test", "The Boss", "a-long-password-1", "")]
+    assert fake.login_attempts == [("boss@apex.test", "a-long-password-1")]
+    assert app.title[0].value == "Ask the documents"
+
+
+def test_the_token_is_sent_when_required(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _needs_setup(token_required=True)
+    app = _run(monkeypatch, fake)
+    _fill_setup(app)
+    app.text_input[4].set_value("the-token")
+    app.button[0].click().run()
+    assert fake.setup_calls[0][3] == "the-token"
+
+
+def test_mismatched_passwords_are_caught_before_anything_is_sent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _needs_setup()
+    app = _run(monkeypatch, fake)
+    _fill_setup(app, repeat="something-else-123")
+    app.button[0].click().run()
+    assert fake.setup_calls == [] and fake.login_attempts == []
+    assert any("do not match" in e.value for e in app.error)
+
+
+def test_a_server_refusal_is_shown_in_plain_words(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _needs_setup(token_required=True)
+    fake.setup_error = ApiError(403, "invalid_setup_token")
+    app = _run(monkeypatch, fake)
+    _fill_setup(app)
+    app.text_input[4].set_value("wrong")
+    app.button[0].click().run()
+    assert any("setup token is not correct" in e.value for e in app.error)
+    assert fake.login_attempts == []
+
+
+def test_when_setup_is_switched_off_the_page_explains_the_command_line_way(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _run(monkeypatch, _needs_setup(available=False))
+    assert not app.text_input  # no form to fill in
+    assert any("SETUP_TOKEN" in w.value for w in app.warning)
+    assert "create-user" in app.code[0].value
+
+
+def test_once_an_account_exists_the_normal_sign_in_form_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _run(monkeypatch, FakeApi(user=None))  # setup_required is False by default
+    assert [t.label for t in app.text_input] == ["Login ID or email", "Password"]

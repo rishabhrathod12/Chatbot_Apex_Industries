@@ -47,6 +47,63 @@ def session_ended() -> None:
 # ----------------------------------------------------------------------------- sign in
 
 
+def setup_status() -> dict[str, Any]:
+    """Whether the system still needs its first account. If we can't tell, show the normal form."""
+    try:
+        return api().setup_status()
+    except (ApiError, ApiUnreachable):
+        return {"setup_required": False, "token_required": False, "available": False}
+
+
+def setup_form(status: dict[str, Any]) -> None:
+    """First run only: no account exists, so the first person creates the Super Admin here."""
+    st.subheader("First-time setup")
+    if not status["available"]:
+        st.warning(
+            "No account exists yet, and setting one up from this page is switched off. "
+            "Either set SETUP_TOKEN in .env and restart the API, or create the Super Admin "
+            "on the command line:"
+        )
+        st.code(
+            'python -m app.cli create-user --email you@company.com --name "Your Name" '
+            "--role super_admin"
+        )
+        return
+    st.write(
+        "No accounts exist yet. Create the Super Admin account for this system. "
+        "This page disappears as soon as it exists; other accounts are added later "
+        "from the Users page."
+    )
+    with st.form("setup"):
+        full_name = st.text_input("Full name")
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password", help="At least 12 characters.")
+        repeat = st.text_input("Repeat password", type="password")
+        token = (
+            st.text_input("Setup token", type="password", help="The SETUP_TOKEN value in .env.")
+            if status["token_required"]
+            else ""
+        )
+        submitted = st.form_submit_button(
+            "Create Super Admin account", type="primary", use_container_width=True
+        )
+    if not submitted:
+        return
+    if problem := ui.setup_problem(full_name, email, password, repeat):
+        st.error(problem)
+        return
+    try:
+        api().setup(email, full_name, password, token)
+        api().login(email, password)
+    except ApiError as error:
+        st.error(ui.retry_message(error), icon="\U0001f512")
+        return
+    except ApiUnreachable:
+        st.error("Cannot reach the API. Is it running?", icon="\U0001f50c")
+        return
+    st.rerun()
+
+
 def login_page() -> None:
     _, middle, _ = st.columns([1, 2, 1])
     with middle:
@@ -54,8 +111,12 @@ def login_page() -> None:
         st.caption("Apex Precision Manufacturing Pvt. Ltd. · fictional sample data")
         if notice := st.session_state.pop("notice", None):
             st.info(notice)
+        status = setup_status()
+        if status["setup_required"]:
+            setup_form(status)
+            return
         with st.form("login"):
-            email = st.text_input("Email")
+            email = st.text_input("Login ID or email")
             password = st.text_input("Password", type="password")
             submitted = st.form_submit_button("Sign in", type="primary", use_container_width=True)
         if submitted:
@@ -397,7 +458,10 @@ def user_row(person: dict[str, Any], me: str) -> None:
         with info:
             st.markdown(f"**{ui.escape_markdown(person['full_name'])}**")
             places = ", ".join(ui.department_label(d) for d in person["departments"]) or "All"
-            st.caption(f"{person['email']} · {ui.role_label(person['role'])} · {places}")
+            st.caption(
+                f"Login ID: {person['login_id']} · {person['email']} · "
+                f"{ui.role_label(person['role'])} · {places}"
+            )
         with status:
             active = person["is_active"]
             st.badge("Active" if active else "Disabled", color="green" if active else "gray")

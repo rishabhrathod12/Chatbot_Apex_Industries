@@ -44,6 +44,7 @@ def test_login_returns_tokens_and_who_you_are(raw_client: TestClient, alice) -> 
     assert body["expires_in"] == 30 * 60
     assert body["user"] == {
         "user_id": alice.id,
+        "login_id": "alice",
         "email": "alice@apex.test",
         "full_name": "alice",
         "role": "employee",

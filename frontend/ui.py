@@ -44,7 +44,22 @@ _ERROR_TEXT = {
     "manager_needs_department": "A department manager needs at least one department.",
     "cannot_demote_or_disable_self": "You cannot demote or disable your own account.",
     "user_not_found": "That user no longer exists.",
+    "invalid_setup_token": "That setup token is not correct.",
+    "setup_already_done": "An account already exists. Please sign in.",
+    "setup_disabled": "Setup from this page is switched off. See the instructions above.",
 }
+
+
+def setup_problem(full_name: str, email: str, password: str, repeat: str) -> str | None:
+    """Mistakes we can catch before sending anything (the server checks everything again)."""
+    if not full_name.strip() or not email.strip() or not password:
+        return "Please fill in your name, email and password."
+    if "@" not in email:
+        return "That does not look like an email address."
+    if password != repeat:
+        return "The two passwords do not match."
+    return None
+
 
 _REJECT_TEXT = {
     "unsupported_type": "not a PDF, DOCX or TXT file",

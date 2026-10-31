@@ -25,6 +25,9 @@ class Settings(BaseSettings):
 
     openai_api_key: SecretStr | None = None
     jwt_secret_key: SecretStr | None = None
+    # First-run setup of the Super Admin from the web page. In production the page works only
+    # when this is set, and the person must type it. In development it is optional.
+    setup_token: SecretStr | None = None
 
     # Login and tokens. Access tokens are short; refresh tokens let a session continue.
     jwt_issuer: str = "apex-knowledge-assistant"

@@ -60,7 +60,7 @@ It stores ids and codes only. Failed logins store a one-way fingerprint of the t
 
 ## 5. Accounts
 
-There is no built-in account and no default password. Create the first Super Admin on the command line (`python -m app.cli create-user ...`). Passwords are typed at a hidden prompt or read from an environment variable and are never printed. Minimum length 12. `seed-demo` creates six demo users with one generated password and refuses to run in production.
+There is no built-in account and no default password. The first Super Admin is created either on the command line (`python -m app.cli create-user ...`) or on the **First-time setup** form that the sign-in page shows while no user exists. That form is the one unauthenticated way to create an account, so: it works only while the users table is empty (then it is closed for good, `409 setup_already_done`); in production it is off unless `SETUP_TOKEN` is set in `.env`, and the person must type that token (compared in constant time, wrong guesses rate limited and audited as `setup_admin`/`denied`); in development the token is optional. Anyone who can reach a fresh, empty production system before you do could claim it if they knew the token, so set a long random `SETUP_TOKEN`, create the account straight away, and remove the token afterwards. Passwords are typed at a hidden prompt or read from an environment variable and are never printed. Minimum length 12. `seed-demo` creates six demo users with one generated password and refuses to run in production.
 
 ## 6. Known limits
 

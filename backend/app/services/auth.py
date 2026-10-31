@@ -34,6 +34,7 @@ class AuthError(Exception):
 def principal_of(user: User) -> Principal:
     return Principal(
         user_id=user.id,
+        login_id=user.login_id,
         email=user.email,
         full_name=user.full_name,
         role=Role(user.role),
@@ -54,6 +55,7 @@ def _issue(db: Session, user: User, settings: Settings) -> TokenPair:
         expires_in=access.expires_in,
         user=PrincipalOut(
             user_id=principal.user_id,
+            login_id=principal.login_id,
             email=principal.email,
             full_name=principal.full_name,
             role=principal.role,
@@ -67,7 +69,7 @@ def login(
     settings: Settings,
     limiter: LoginLimiter,
     *,
-    email: str,
+    identifier: str,
     password: str,
     client_address: str,
 ) -> TokenPair:
@@ -76,13 +78,16 @@ def login(
     Wrong email, wrong password and a disabled account all give the same answer, and the same
     amount of work, so a caller cannot tell which emails exist.
     """
-    key = f"{client_address}|{email}"
+    user = repo.get_by_identifier(db, identifier)
+    # One lockout counter per person, whether they type their Login ID or their email.
+    key = f"{client_address}|{user.id if user else identifier}"
     wait = limiter.retry_after(key)
     if wait:
-        audit.record(db, "login", "denied", target_type="email", target_id=audit.fingerprint(email))
+        audit.record(
+            db, "login", "denied", target_type="email", target_id=audit.fingerprint(identifier)
+        )
         raise AuthError("too_many_attempts", status=429, retry_after=wait)
 
-    user = repo.get_by_email(db, email)
     if user is None:
         burn_password_check(password, settings.password_hash_cost_log2)
     valid = user is not None and verify_password(password, user.password_hash)
@@ -94,7 +99,7 @@ def login(
             "failed",
             user_id=user.id if user else None,
             target_type="email",
-            target_id=audit.fingerprint(email),
+            target_id=audit.fingerprint(identifier),
         )
         raise AuthError("invalid_credentials")
 

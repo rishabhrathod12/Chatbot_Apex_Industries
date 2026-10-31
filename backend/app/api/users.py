@@ -18,6 +18,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 def _out(user: User) -> UserOut:
     return UserOut(
         id=user.id,
+        login_id=user.login_id,
         email=user.email,
         full_name=user.full_name,
         role=Role(user.role),

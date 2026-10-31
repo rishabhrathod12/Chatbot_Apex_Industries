@@ -39,6 +39,7 @@ class Principal:
     full_name: str
     role: Role
     departments: frozenset[str]
+    login_id: str = ""
 
     @property
     def is_admin(self) -> bool:

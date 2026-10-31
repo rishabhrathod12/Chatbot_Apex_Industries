@@ -1,3 +1,4 @@
+import re
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
@@ -20,6 +21,37 @@ def get_by_email(db: Session, email: str) -> User | None:
     return db.scalars(select(User).where(User.email == email.strip().lower())).first()
 
 
+def get_by_login_id(db: Session, login_id: str) -> User | None:
+    return db.scalars(select(User).where(User.login_id == login_id.strip().lower())).first()
+
+
+def get_by_identifier(db: Session, identifier: str) -> User | None:
+    """Find a user by what they typed at sign-in: an email (has an "@") or a Login ID."""
+    identifier = identifier.strip().lower()
+    if "@" in identifier:
+        return get_by_email(db, identifier)
+    return get_by_login_id(db, identifier)
+
+
+_LOGIN_ID_MAX = 32
+_LOGIN_ID_BAD = re.compile(r"[^a-z0-9._-]")
+
+
+def unique_login_id(db: Session, base: str) -> str:
+    """A free Login ID close to `base`: lower-case, only letters, digits and . _ -, adding a
+    number if someone already has it."""
+    stem = _LOGIN_ID_BAD.sub("", base.strip().lower())[: _LOGIN_ID_MAX - 4] or "user"
+    candidate, number = stem, 1
+    while get_by_login_id(db, candidate) is not None:
+        number += 1
+        candidate = f"{stem}{number}"
+    return candidate
+
+
+def any_user(db: Session) -> bool:
+    return db.scalars(select(User.id).limit(1)).first() is not None
+
+
 def list_all(db: Session) -> list[User]:
     return list(db.scalars(select(User).order_by(User.created_at, User.email)))
 
@@ -32,9 +64,15 @@ def create(
     password_hash: str,
     role: str,
     departments: Iterable[str],
+    login_id: str | None = None,
 ) -> User:
+    email = email.strip().lower()
     user = User(
-        email=email.strip().lower(), full_name=full_name, password_hash=password_hash, role=role
+        email=email,
+        login_id=unique_login_id(db, login_id or email.split("@")[0]),
+        full_name=full_name,
+        password_hash=password_hash,
+        role=role,
     )
     set_departments(user, departments)
     db.add(user)

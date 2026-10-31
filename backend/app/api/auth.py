@@ -7,8 +7,16 @@ from app.core.database import get_db
 from app.core.permissions import Principal
 from app.core.rate_limit import LoginLimiter
 from app.core.security import TokenError
-from app.schemas.auth import LoginRequest, PrincipalOut, RefreshRequest, TokenPair
+from app.schemas.auth import (
+    LoginRequest,
+    PrincipalOut,
+    RefreshRequest,
+    SetupRequest,
+    SetupStatus,
+    TokenPair,
+)
 from app.services import auth as auth_service
+from app.services import setup as setup_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -33,7 +41,7 @@ def login(
             db,
             settings,
             limiter,
-            email=body.email,
+            identifier=body.identifier,
             password=body.password,
             client_address=request.client.host if request.client else "unknown",
         )
@@ -41,6 +49,43 @@ def login(
         raise _as_http(exc) from exc
     except TokenError as exc:
         raise HTTPException(status_code=503, detail=exc.reason) from exc
+
+
+@router.get("/setup", response_model=SetupStatus)
+def setup_status(
+    db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+) -> SetupStatus:
+    """Does the system still need its first Super Admin? Reveals nothing else."""
+    return setup_service.status(db, settings)
+
+
+@router.post("/setup", response_model=PrincipalOut, status_code=201)
+def setup(
+    body: SetupRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    limiter: LoginLimiter = Depends(get_login_limiter),
+) -> PrincipalOut:
+    try:
+        user = setup_service.create_first_admin(
+            db,
+            settings,
+            limiter,
+            request.client.host if request.client else "unknown",
+            body,
+        )
+    except auth_service.AuthError as exc:
+        raise _as_http(exc) from exc
+    principal = auth_service.principal_of(user)
+    return PrincipalOut(
+        user_id=principal.user_id,
+        login_id=principal.login_id,
+        email=principal.email,
+        full_name=principal.full_name,
+        role=principal.role,
+        departments=sorted(principal.departments),
+    )
 
 
 @router.post("/refresh", response_model=TokenPair)
@@ -67,6 +112,7 @@ def logout(body: RefreshRequest, db: Session = Depends(get_db)) -> Response:
 def me(principal: Principal = Depends(get_current_principal)) -> PrincipalOut:
     return PrincipalOut(
         user_id=principal.user_id,
+        login_id=principal.login_id,
         email=principal.email,
         full_name=principal.full_name,
         role=principal.role,

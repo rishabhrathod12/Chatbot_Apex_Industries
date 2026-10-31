@@ -6,6 +6,7 @@ import pytest
 
 import eval.ragas_run as ragas_run
 from app.rag.generation.prompts import SYSTEM_PROMPT, build_messages
+from app.rag.ingestion.embedder import EmbeddingError
 from app.rag.vectorstore import SearchHit
 from eval.metrics import Case, load_golden
 from eval.ragas_report import (
@@ -197,7 +198,12 @@ def test_main_stops_before_spending_when_ragas_is_missing(
 def test_main_without_an_api_key_explains_itself(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    def no_key(_settings: object) -> None:
+        raise EmbeddingError("embedding_not_configured")
+
+    # Stubbed so the result does not depend on whether the developer's real .env holds a key.
     monkeypatch.setattr(ragas_run, "check_ragas", lambda: None)
+    monkeypatch.setattr(ragas_run, "get_embedder", no_key)
     assert ragas_run.main([]) == 2
     assert "OPENAI_API_KEY" in capsys.readouterr().err
 

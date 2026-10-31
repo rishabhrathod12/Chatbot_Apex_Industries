@@ -60,7 +60,7 @@ def _create(settings: Settings, args: argparse.Namespace) -> int:
         except user_service.UserError as exc:
             print(f"Could not create the user: {exc.reason}", file=sys.stderr)
             return 1
-    print(f"Created {user.role} {user.email}")
+    print(f"Created {user.role} {user.email} (Login ID: {user.login_id})")
     return 0
 
 
@@ -76,7 +76,7 @@ def _seed_demo(settings: Settings) -> int:
         for email, name, role, departments in DEMO_USERS:
             if repo.get_by_email(db, email):
                 continue
-            user_service.create_user(
+            user = user_service.create_user(
                 db,
                 settings,
                 None,
@@ -88,14 +88,15 @@ def _seed_demo(settings: Settings) -> int:
                     departments=departments,
                 ),
             )
-            created.append((email, role.value, ",".join(departments) or "all"))
+            created.append((user.login_id, email, role.value, ",".join(departments) or "all"))
     if not created:
         print("All demo users already exist. Nothing changed (existing passwords are kept).")
         return 0
     print("Demo users created. They all share this password. Shown once, so copy it now:\n")
     print(f"    {password}\n")
-    for address, role_name, department_names in created:
-        print(f"    {address:<34} {role_name:<20} {department_names}")
+    print(f"    {'Login ID':<18} {'Email':<34} {'Role':<20} Departments")
+    for login_id, address, role_name, department_names in created:
+        print(f"    {login_id:<18} {address:<34} {role_name:<20} {department_names}")
     return 0
 
 

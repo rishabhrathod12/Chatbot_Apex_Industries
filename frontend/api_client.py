@@ -58,11 +58,30 @@ class ApiClient:
     def _forget(self) -> None:
         self._access = self._refresh = self.user = None
 
-    def login(self, email: str, password: str) -> dict[str, Any]:
-        pair = self._send("POST", "/auth/login", json={"email": email, "password": password})
+    def login(self, login_id: str, password: str) -> dict[str, Any]:
+        """`login_id` may be a Login ID or an email address."""
+        pair = self._send("POST", "/auth/login", json={"login_id": login_id, "password": password})
         self._store(pair)
         assert self.user is not None
         return self.user
+
+    def setup_status(self) -> dict[str, Any]:
+        """Does the system still need its first Super Admin? Needs no login."""
+        status: dict[str, Any] = self._send("GET", "/auth/setup")
+        return status
+
+    def setup(self, email: str, full_name: str, password: str, token: str = "") -> None:
+        """Create the first Super Admin. Does not sign in; call `login` afterwards."""
+        self._send(
+            "POST",
+            "/auth/setup",
+            json={
+                "email": email,
+                "full_name": full_name,
+                "password": password,
+                "setup_token": token,
+            },
+        )
 
     def logout(self) -> None:
         refresh, self._refresh = self._refresh, None

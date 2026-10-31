@@ -22,7 +22,9 @@ pre-commit install
 
 There is no default account. Put a signing secret in `.env` (at least 32 characters, for example the output of
 `python -c "import secrets; print(secrets.token_urlsafe(48))"`) as `JWT_SECRET_KEY=...`, apply the database
-(`alembic -c backend/alembic.ini upgrade head`), then create your Super Admin. The password is typed at a hidden prompt:
+(`alembic -c backend/alembic.ini upgrade head`), then create your Super Admin. Easiest: start the app (`.\scripts\dev.ps1`); on a system with no accounts the sign-in page
+shows a **First-time setup** form, and you create the Super Admin there (it disappears once the account exists; in production it
+needs `SETUP_TOKEN` in `.env`, see `docs/security.md`). Or on the command line, with the password typed at a hidden prompt:
 
 ```powershell
 .venv\Scripts\python.exe -m app.cli create-user --email you@company.com --name "Your Name" --role super_admin
