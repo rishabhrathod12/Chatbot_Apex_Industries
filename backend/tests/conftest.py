@@ -44,6 +44,7 @@ def settings(tmp_path: Path) -> Iterator[Settings]:
         retrieval_mode="semantic",
         rerank_enabled=False,
         max_upload_mb=1,
+        personal_upload_extensions=[".pdf", ".docx", ".txt"],  # older tests add small text notes
         max_files_per_request=3,
         jwt_secret_key="test-secret-" + "x" * 32,
         password_hash_cost_log2=10,  # fast hashing for tests (production uses 15)

@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     vector_store_path: str = "./vector_db"
     upload_dir: str = "./storage/uploads"
     max_upload_mb: int = 20
+    # File types a person may add to their own private library. Company documents may also be
+    # DOCX or TXT (the Super Admin adds those); staff documents are PDFs.
+    personal_upload_extensions: list[str] = [".pdf"]
     max_files_per_request: int = 10
     max_pdf_pages: int = 200
     chunk_max_tokens: int = 600
@@ -71,6 +74,15 @@ class Settings(BaseSettings):
     # use WITH reranking, which judges relevance properly. Without reranking the right value is
     # about 0.40 (see docs/retrieval-baseline.md; a looser gate then lets weak matches through).
     retrieval_min_score: float = 0.25
+
+    @model_validator(mode="after")
+    def _check_upload_types(self) -> "Settings":
+        allowed = {".pdf", ".docx", ".txt"}
+        cleaned = [e.strip().lower() for e in self.personal_upload_extensions]
+        if not cleaned or any(e not in allowed for e in cleaned):
+            raise ValueError("PERSONAL_UPLOAD_EXTENSIONS must be a list of .pdf, .docx, .txt")
+        self.personal_upload_extensions = cleaned
+        return self
 
     @model_validator(mode="after")
     def _check_database_url(self) -> "Settings":

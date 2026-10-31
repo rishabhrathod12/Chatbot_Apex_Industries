@@ -71,6 +71,7 @@ _REJECT_TEXT = {
     "unsupported_type": "not a PDF, DOCX or TXT file",
     "content_mismatch": "the contents do not match the file type",
     "empty_file": "the file is empty",
+    "pdf_only": "only PDF files can be added to your own library",
     "file_too_large": "the file is too large",
 }
 
@@ -118,12 +119,14 @@ def source_title(source: dict[str, Any]) -> str:
     return " · ".join(parts)
 
 
-BadgeColor = Literal["green", "red", "orange"]
+BadgeColor = Literal["green", "red", "orange", "gray"]
 
 
 def status_badge(document: dict[str, Any]) -> tuple[str, BadgeColor]:
     """Label and colour for a document's status."""
     status = document.get("status", "")
+    if status == "archived":
+        return "Archived", "gray"
     if status == "ready":
         return "Ready", "green"
     if status == "failed":
@@ -214,3 +217,123 @@ def retry_message(error: ApiError) -> str:
         minutes = max(1, round(error.retry_after / 60))
         return f"Too many failed attempts. Try again in about {minutes} minute(s)."
     return error_message(error)
+
+
+def company_upload_targets(user: dict[str, Any]) -> list[str]:
+    """Departments this user may add COMPANY documents to (empty for ordinary employees)."""
+    return [t for t in upload_targets(user) if t]
+
+
+DOCUMENT_TYPES = {
+    "sop": "SOP",
+    "manual": "Manual",
+    "policy": "Policy",
+    "form": "Form",
+    "checklist": "Checklist",
+    "report": "Report",
+    "other": "Other",
+}
+
+# Plain words for the audit log (the stored action names are for programs).
+ACTION_LABELS = {
+    "login": "Sign-in",
+    "logout": "Sign-out",
+    "refresh": "Session renewed",
+    "refresh_token_reuse": "Old session token reused",
+    "setup_admin": "First Super Admin created",
+    "user_create": "Account created",
+    "user_update": "Account details changed",
+    "user_activate": "Account enabled",
+    "user_deactivate": "Account disabled",
+    "user_role_change": "Role changed",
+    "user_departments_change": "Departments changed",
+    "password_reset": "Password reset by an admin",
+    "password_change": "Password changed",
+    "admin_endpoint": "Admin page refused",
+    "document_upload": "Document uploaded",
+    "document_delete": "Document deleted",
+    "document_reindex": "Document re-indexed",
+    "document_archive": "Document archived",
+    "document_restore": "Document restored",
+    "document_access": "Document access refused",
+    "document_version_upload": "New version uploaded",
+    "document_version_replace": "Old version replaced",
+}
+
+OUTCOME_LABELS = {"ok": "OK", "denied": "Refused", "failed": "Failed"}
+
+
+def action_label(action: str) -> str:
+    return ACTION_LABELS.get(action, action.replace("_", " ").capitalize())
+
+
+def audit_summary(entry: dict[str, Any]) -> str:
+    """One line for an audit entry, e.g. 'Asha Admin: Account disabled (Esha Production)'."""
+    who = entry.get("actor_name") or "Someone not signed in"
+    line = f"{who}: {action_label(entry['action'])}"
+    if entry.get("target_label"):
+        line += f" ({entry['target_label']})"
+    if entry.get("detail"):
+        line += f" [{entry['detail']}]"
+    return line
+
+
+# ---- navigation: which pages each kind of account sees (a convenience; the server decides) ----
+
+DASHBOARD = "\U0001f3e0 Dashboard"
+UPLOAD_PDF = "\u2b06\ufe0f Upload PDF"
+MY_DOCUMENTS = "\U0001f4c4 My Documents"
+CHAT_MINE = "\U0001f4ac Chat with My Documents"
+COMPANY_KNOWLEDGE = "\U0001f3e2 Company Knowledge"
+HISTORY = "\U0001f558 Conversation History"
+DEPARTMENT_DOCUMENTS = "\U0001f5c2\ufe0f Department Documents"
+
+OVERVIEW = "\U0001f4ca Overview"
+EMPLOYEES = "\U0001f465 Employee Management"
+CREATE_EMPLOYEE = "\u2795 Create Employee"
+COMPANY_DOCUMENTS = "\U0001f5c2\ufe0f Company Documents"
+UPLOAD_COMPANY = "\u2b06\ufe0f Upload Company Documents"
+DEPARTMENTS_PAGE = "\U0001f3ed Departments"
+AUDIT_LOGS = "\U0001f9fe Audit Logs"
+ASK_COMPANY = "\U0001f4ac Ask Company Documents"
+
+ADMIN_PAGES = [
+    OVERVIEW,
+    EMPLOYEES,
+    CREATE_EMPLOYEE,
+    COMPANY_DOCUMENTS,
+    UPLOAD_COMPANY,
+    DEPARTMENTS_PAGE,
+    AUDIT_LOGS,
+    ASK_COMPANY,
+]
+EMPLOYEE_PAGES = [DASHBOARD, UPLOAD_PDF, MY_DOCUMENTS, CHAT_MINE, COMPANY_KNOWLEDGE, HISTORY]
+CHAT_PAGES = {CHAT_MINE, COMPANY_KNOWLEDGE, ASK_COMPANY}
+
+ALL_DEPARTMENTS = "All departments"
+
+
+def legacy_page(user: dict[str, Any], name: str) -> str | None:
+    """Old bookmarks (?page=documents, users, chat) still land somewhere sensible."""
+    admin = user.get("role") == "super_admin"
+    return {
+        "documents": COMPANY_DOCUMENTS if admin else MY_DOCUMENTS,
+        "users": EMPLOYEES if admin else None,
+        "chat": ASK_COMPANY if admin else CHAT_MINE,
+    }.get(name)
+
+
+def pages_for(user: dict[str, Any]) -> list[str]:
+    """The sidebar pages for this account. Super Admins get the admin workspace; everyone else
+    the staff workspace (department managers also manage their departments' documents)."""
+    if user.get("role") == "super_admin":
+        return list(ADMIN_PAGES)
+    pages = list(EMPLOYEE_PAGES)
+    if user.get("role") == "department_manager":
+        pages.insert(pages.index(HISTORY), DEPARTMENT_DOCUMENTS)
+    return pages
+
+
+def short_time(value: str | None) -> str:
+    """'2026-10-31T09:05:12.123+00:00' -> '2026-10-31 09:05'."""
+    return (value or "")[:16].replace("T", " ")

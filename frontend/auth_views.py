@@ -85,6 +85,13 @@ def choose_portal(portal: str | None) -> None:
     st.rerun()
 
 
+def session_ended() -> None:
+    """The login is no longer valid: go back to the sign-in page with an explanation."""
+    st.session_state.pop("conversation_id", None)
+    st.session_state["notice"] = "Your session ended. Please sign in again."
+    st.rerun()
+
+
 def forget_portal() -> None:
     """After signing out: back to the landing page."""
     st.session_state.pop("portal", None)

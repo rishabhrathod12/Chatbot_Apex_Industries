@@ -337,6 +337,36 @@ def test_the_sample_set_marks_safety_and_hr_company_wide() -> None:
     assert wide == {"03_Factory_Safety_Manual.pdf", "05_HR_Policy.pdf"}
 
 
+def test_audit_entries_read_as_plain_sentences() -> None:
+    entry = {
+        "actor_name": "Asha Admin",
+        "action": "user_role_change",
+        "target_label": "Esha Production",
+        "detail": "role:super_admin",
+    }
+    assert ui.audit_summary(entry) == (
+        "Asha Admin: Role changed (Esha Production) [role:super_admin]"
+    )
+    nobody = {"actor_name": None, "action": "login", "target_label": None, "detail": None}
+    assert ui.audit_summary(nobody) == "Someone not signed in: Sign-in"
+    assert ui.action_label("some_new_action") == "Some new action"  # unknown ones still read ok
+
+
+def test_times_are_shortened_for_display() -> None:
+    assert ui.short_time("2026-10-31T09:05:12.123456+00:00") == "2026-10-31 09:05"
+    assert ui.short_time(None) == ""
+
+
+def test_archived_documents_get_a_grey_badge() -> None:
+    assert ui.status_badge({"status": "archived"}) == ("Archived", "gray")
+
+
+def test_only_people_who_can_add_company_documents_get_a_department_list() -> None:
+    assert ui.company_upload_targets(EMPLOYEE) == []
+    assert ui.company_upload_targets(MANAGER) == ["safety"]
+    assert ui.company_upload_targets(ADMIN) == list(ui.DEPARTMENTS)
+
+
 # ---------- the pages, with a fake API ----------
 
 ANSWER = {
@@ -380,6 +410,75 @@ DOCUMENT = {
     "title": "Factory Health & Safety Manual",
     "created_at": "x",
 }
+FAILED_DOCUMENT = {
+    **DOCUMENT,
+    "id": "d2",
+    "original_filename": "bad.pdf",
+    "title": None,
+    "status": "failed",
+    "status_reason": "corrupt_pdf",
+    "chunk_count": 0,
+    "department": "hr",
+    "visibility": "department",
+}
+PERSONAL_DOCUMENT = {
+    **DOCUMENT,
+    "id": "d3",
+    "scope": "personal",
+    "department": "",
+    "visibility": "personal",
+    "original_filename": "my-notes.pdf",
+    "title": "My shift notes",
+}
+ARCHIVED_DOCUMENT = {
+    **DOCUMENT,
+    "id": "d4",
+    "status": "archived",
+    "title": "Old Safety Rules",
+    "original_filename": "old.pdf",
+    "chunk_count": 0,
+    "archived_at": "2026-10-30T10:00:00Z",
+}
+STATS = {
+    "accounts": {
+        "total": 6,
+        "active": 5,
+        "inactive": 1,
+        "by_role": {"super_admin": 1, "department_manager": 2, "employee": 3},
+    },
+    "departments": [
+        {"code": code, "employees": 2 if code == "production" else 0, "managers": 0, "documents": 1}
+        for code in ("production", "maintenance", "hr", "safety", "quality", "stores")
+    ],
+    "documents": {"total": 6, "archived": 1, "by_status": {"ready": 6}},
+    "recent_uploads": [
+        {
+            "document_id": "d1",
+            "title": "Factory Health & Safety Manual",
+            "filename": "03.pdf",
+            "department": "safety",
+            "status": "ready",
+            "uploaded_by": "Asha Admin",
+            "created_at": "2026-10-31T09:05:12+00:00",
+        }
+    ],
+    "recent_activity": [
+        {
+            "id": 7,
+            "created_at": "2026-10-31T09:06:00+00:00",
+            "action": "user_deactivate",
+            "outcome": "ok",
+            "actor_id": "u-admin",
+            "actor_name": "Asha Admin",
+            "actor_login_id": "admin",
+            "target_type": "user",
+            "target_id": "u-emp",
+            "target_label": "Esha Production",
+            "detail": None,
+        }
+    ],
+}
+AUDIT_ENTRY = {**STATS["recent_activity"][0]}  # type: ignore[dict-item]
 PEOPLE = [
     {**ADMIN, "id": "u-admin", "login_id": "admin", "is_active": True, "created_at": "x"},
     {**EMPLOYEE, "id": "u-emp", "login_id": "esha", "is_active": True, "created_at": "x"},
@@ -428,6 +527,10 @@ class FakeApi:
         self.temporary_password: str | None = None
         self.created: list[tuple[Any, ...]] = []
         self.updated: list[tuple[str, dict[str, Any]]] = []
+        self.documents: list[dict[str, Any]] = [DOCUMENT, FAILED_DOCUMENT, PERSONAL_DOCUMENT]
+        self.uploaded: list[tuple[Any, ...]] = []
+        self.document_calls: list[tuple[str, str]] = []
+        self.audit_requests: list[dict[str, Any]] = []
 
     def healthy(self) -> bool:
         return self._healthy
@@ -467,18 +570,46 @@ class FakeApi:
         return {"conversation_id": "d" * 32, "status": "answered", "answer": "x", "sources": []}
 
     def list_documents(self) -> list[dict[str, Any]]:
-        failed = {
-            **DOCUMENT,
-            "id": "d2",
-            "original_filename": "bad.pdf",
-            "title": None,
-            "status": "failed",
-            "status_reason": "corrupt_pdf",
-            "chunk_count": 0,
-            "department": "hr",
-            "visibility": "department",
+        return self.documents
+
+    def upload(
+        self,
+        files: list[tuple[str, bytes]],
+        scope: str,
+        department: str | None,
+        company_wide: bool = False,
+        details: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        self.uploaded.append((scope, department, company_wide, details))
+        return [{"filename": name, "status": "accepted"} for name, _ in files]
+
+    def archive_document(self, document_id: str) -> None:
+        self.document_calls.append(("archive", document_id))
+
+    def restore_document(self, document_id: str) -> None:
+        self.document_calls.append(("restore", document_id))
+
+    def reindex(self, document_id: str) -> None:
+        self.document_calls.append(("reindex", document_id))
+
+    def delete_document(self, document_id: str) -> None:
+        self.document_calls.append(("delete", document_id))
+
+    def list_versions(self, document_id: str) -> list[dict[str, Any]]:
+        return [DOCUMENT]
+
+    def admin_stats(self) -> dict[str, Any]:
+        return STATS
+
+    def admin_audit(self, page: int = 1, page_size: int = 25, **filters: str) -> dict[str, Any]:
+        self.audit_requests.append({"page": page, **filters})
+        return {
+            "items": [AUDIT_ENTRY] * min(page_size, 3),
+            "total": 60,
+            "page": page,
+            "page_size": page_size,
+            "available_actions": ["login", "user_deactivate"],
         }
-        return [DOCUMENT, failed]
 
     def delete_conversation(self, conversation_id: str) -> None:
         return None
@@ -521,6 +652,13 @@ def _run(
     app = _app(monkeypatch, fake)
     if select_conversation:
         app.session_state["conversation_id"] = "c" * 32
+    return app.run()
+
+
+def _page(monkeypatch: pytest.MonkeyPatch, fake: FakeApi, page: str) -> AppTest:
+    """Open the app straight on one page (the sidebar remembers the choice in `nav`)."""
+    app = _app(monkeypatch, fake)
+    app.session_state["nav"] = page
     return app.run()
 
 
@@ -599,7 +737,7 @@ def test_signing_in_sends_the_chosen_portal_and_shows_the_app(
     app.button[0].click().run()
     assert fake.login_attempts == [("esha", "a-long-password-1")]
     assert fake.login_portals == [portal]
-    assert app.title[0].value == "Ask the documents"
+    assert app.title[0].value == "Welcome, Esha"
 
 
 def test_a_failed_sign_in_shows_a_plain_message_that_names_the_portal(
@@ -660,78 +798,168 @@ def test_the_sidebar_shows_who_is_signed_in(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.parametrize(
-    ("user", "pages"),
-    [(ADMIN, 3), (MANAGER, 2), (EMPLOYEE, 2)],
+    ("user", "first_title"),
+    [(ADMIN, "Overview"), (MANAGER, "Welcome, Sana"), (EMPLOYEE, "Welcome, Esha")],
 )
-def test_only_super_admins_get_the_users_page(
-    monkeypatch: pytest.MonkeyPatch, user: dict[str, Any], pages: int
+def test_each_role_gets_its_own_workspace(
+    monkeypatch: pytest.MonkeyPatch, user: dict[str, Any], first_title: str
 ) -> None:
     app = _run(monkeypatch, FakeApi(user=user))
-    options = app.sidebar.radio[0].options
-    assert len(options) == pages
-    assert ("👥 Users" in options) == (user["role"] == "super_admin")
+    assert not app.exception
+    assert app.sidebar.radio[0].options == ui.pages_for(user)
+    assert app.title[0].value == first_title
 
 
-def test_the_users_page_lists_everyone_and_protects_your_own_account(
+def test_the_pages_for_each_role() -> None:
+    assert ui.pages_for(ADMIN) == ui.ADMIN_PAGES
+    assert ui.pages_for(EMPLOYEE) == ui.EMPLOYEE_PAGES
+    manager_pages = ui.pages_for(MANAGER)
+    assert ui.DEPARTMENT_DOCUMENTS in manager_pages
+    assert [p for p in manager_pages if p != ui.DEPARTMENT_DOCUMENTS] == ui.EMPLOYEE_PAGES
+    assert not set(ui.ADMIN_PAGES) & set(ui.EMPLOYEE_PAGES) - {ui.UPLOAD_PDF}
+
+
+def test_employees_never_see_admin_pages_even_if_the_page_is_forced(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake = FakeApi(user=ADMIN)
-    app = _app(monkeypatch, fake).run()
-    app.sidebar.radio[0].set_value("👥 Users").run()
+    for forbidden in (ui.OVERVIEW, ui.EMPLOYEES, ui.AUDIT_LOGS, ui.COMPANY_DOCUMENTS):
+        fake = FakeApi(user=EMPLOYEE)
+        app = _page(monkeypatch, fake, forbidden)
+        assert app.sidebar.radio[0].value == ui.DASHBOARD  # falls back to their own home
+        assert app.title[0].value == "Welcome, Esha"
+
+
+# ---- employee workspace ----
+
+
+def test_the_dashboard_summarises_my_documents_and_conversations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _run(monkeypatch, FakeApi(user=EMPLOYEE))
+    metrics = {m.label: m.value for m in app.metric}
+    assert metrics == {
+        "My documents": "1",
+        "Ready to ask about": "1",
+        "Company documents for me": "1",  # only the ready one
+        "Conversations": "1",
+    }
+    assert any(b.label == "Upload a PDF" for b in app.button)
+    assert "When can I re-enter an area?" in _all_text(app)
+
+
+def test_the_dashboard_warns_about_a_document_that_could_not_be_processed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeApi(user=EMPLOYEE)
+    fake.documents = [{**PERSONAL_DOCUMENT, "status": "failed", "status_reason": "corrupt_pdf"}]
+    app = _run(monkeypatch, fake)
+    assert any("Could not process" in w.value for w in app.warning)
+
+
+def test_a_dashboard_button_goes_to_its_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _run(monkeypatch, FakeApi(user=EMPLOYEE))
+    next(b for b in app.button if b.key == "go-upload").click().run()
+    assert app.sidebar.radio[0].value == ui.UPLOAD_PDF
+    assert app.title[0].value == "Upload PDF"
+
+
+def test_upload_pdf_page_explains_privacy(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _page(monkeypatch, FakeApi(user=EMPLOYEE), ui.UPLOAD_PDF)
+    assert not app.exception
+    assert any("Only you can see" in i.value for i in app.info)
+    assert next(b for b in app.button if b.key == "personal-upload-go").disabled
+
+
+def test_my_documents_lists_only_my_own_with_delete_but_no_company_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _page(monkeypatch, FakeApi(user=EMPLOYEE), ui.MY_DOCUMENTS)
     assert not app.exception
     text = _all_text(app)
-    assert "Asha Admin" in text and "Esha Production" in text
+    assert "My documents (1)" in text and "My shift notes" in text
+    assert "Factory Health" not in text  # company documents are not listed here
     labels = [b.label for b in app.button]
-    assert "Disable" in labels  # for the employee
-    assert "Enable" in labels  # for the disabled manager
-    assert labels.count("Disable") == 1  # none for your own row
+    assert labels.count("Re-index") == 1 and "Archive" not in labels
 
 
-def test_disabling_a_user_calls_the_api(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = FakeApi(user=ADMIN)
-    app = _app(monkeypatch, fake).run()
-    app.sidebar.radio[0].set_value("👥 Users").run()
-    next(b for b in app.button if b.key == "toggle-u-emp").click().run()
-    assert fake.updated == [("u-emp", {"is_active": False})]
+def test_chat_with_my_documents_searches_only_my_library(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeApi(user=EMPLOYEE, conversations=False)
+    app = _page(monkeypatch, fake, ui.CHAT_MINE)
+    assert app.title[0].value == "Chat with my documents"
+    assert not app.selectbox  # no way to pick another scope or department here
+    app.chat_input[0].set_value("What did I note about the shift?")
+    app.run()
+    assert fake.asked == [("What did I note about the shift?", "personal", None, None)]
+    assert app.session_state["conversation_id"] == "d" * 32
 
 
-# ---- chat ----
+def test_company_knowledge_asks_with_the_chosen_department(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeApi(user=EMPLOYEE, conversations=False)
+    app = _page(monkeypatch, fake, ui.COMPANY_KNOWLEDGE)
+    assert app.title[0].value == "Company knowledge"
+    assert ui.EXAMPLE_QUESTIONS[0] in [b.label for b in app.button]
+    next(s for s in app.selectbox if s.label == "Only in department").select("HR")
+    app.chat_input[0].set_value("How do I submit a leave request?")
+    app.run()
+    assert fake.asked == [("How do I submit a leave request?", "enterprise", "hr", None)]
 
 
-def test_empty_chat_shows_welcome_and_example_questions(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _run(monkeypatch, FakeApi(conversations=False))
-    assert not app.exception
-    assert app.title[0].value == "Ask the documents"
-    labels = [b.label for b in app.button]
-    assert ui.EXAMPLE_QUESTIONS[0] in labels and "➕ New chat" in labels
-
-
-def test_saved_conversation_shows_answer_and_sources(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _run(monkeypatch, FakeApi(), select_conversation=True)
-    assert not app.exception
+def test_company_knowledge_can_browse_the_documents_the_person_may_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeApi(user=EMPLOYEE)
+    fake.documents = [DOCUMENT, FAILED_DOCUMENT, ARCHIVED_DOCUMENT, PERSONAL_DOCUMENT]
+    app = _page(monkeypatch, fake, ui.COMPANY_KNOWLEDGE)
+    app.radio(key="knowledge-view").set_value("Browse documents").run()
     text = _all_text(app)
-    assert "Wait for the incident controller [1]." in text
-    assert "Searched as:" in text
+    assert "Documents you can ask about (2)" in text  # not the archived or the personal one
+    assert "Factory Health & Safety Manual" in text
+    assert "Old Safety Rules" not in text and "My shift notes" not in text
+    assert not [b for b in app.button if b.label in {"Archive", "Re-index", "Delete"}]
+
+
+def test_conversation_history_reads_and_continues_a_conversation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _page(monkeypatch, FakeApi(user=EMPLOYEE), ui.HISTORY)
+    assert app.title[0].value == "Conversation history"
+    assert "When can I re-enter an area?" in _all_text(app)
+    assert "Wait for the incident controller" not in _all_text(app)  # closed until read
+    next(b for b in app.button if b.label == "Read").click().run()
+    assert "Wait for the incident controller [1]." in _all_text(app)
+    next(b for b in app.button if b.label == "Continue in Company Knowledge").click().run()
+    assert app.sidebar.radio[0].value == ui.COMPANY_KNOWLEDGE
+    assert app.session_state["conversation_id"] == "c" * 32
+    assert "Wait for the incident controller [1]." in _all_text(app)
+
+
+def test_a_conversation_does_not_follow_you_to_an_unrelated_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _page(monkeypatch, FakeApi(user=EMPLOYEE), ui.CHAT_MINE)
+    app.session_state["conversation_id"] = "c" * 32
+    app.run()
+    assert "conversation_id" in app.session_state
+    app.sidebar.radio[0].set_value(ui.COMPANY_KNOWLEDGE).run()
+    assert "conversation_id" not in app.session_state
+
+
+def test_a_saved_conversation_shows_answer_and_sources(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _page(monkeypatch, FakeApi(user=EMPLOYEE), ui.COMPANY_KNOWLEDGE)
+    app.session_state["conversation_id"] = "c" * 32
+    app.run()
+    text = _all_text(app)
+    assert "Wait for the incident controller [1]." in text and "Searched as:" in text
     assert [e.label for e in app.expander] == ["Sources (1)"]
     assert "Do not re-enter an evacuated area" in text and "APM-HSE-MAN-003" in text
 
 
-def test_asking_a_question_calls_the_api_with_the_sidebar_choices(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    fake = FakeApi(conversations=False)
-    app = _run(monkeypatch, fake)
-    app.sidebar.selectbox[0].select("HR")
-    app.chat_input[0].set_value("How do I submit a leave request?")
-    app.run()
-    assert fake.asked == [("How do I submit a leave request?", "enterprise", "hr", None)]
-    assert app.session_state["conversation_id"] == "d" * 32
-
-
 def test_api_errors_are_shown_in_plain_words(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = FakeApi(conversations=False)
+    fake = FakeApi(user=EMPLOYEE, conversations=False)
     fake.chat_error = ApiError(503, "llm_not_configured")
-    app = _run(monkeypatch, fake)
+    app = _page(monkeypatch, fake, ui.COMPANY_KNOWLEDGE)
     app.chat_input[0].set_value("hello?")
     app.run()
     assert any("OPENAI_API_KEY" in e.value for e in app.error)
@@ -745,55 +973,180 @@ def test_unreachable_api_shows_how_to_start_it(monkeypatch: pytest.MonkeyPatch) 
     assert not app.chat_input and not app.text_input
 
 
-# ---- documents ----
+# ---- department managers ----
 
 
-def _documents(monkeypatch: pytest.MonkeyPatch, user: dict[str, Any]) -> AppTest:
-    app = _app(monkeypatch, FakeApi(user=user)).run()
-    return app.sidebar.radio[0].set_value("📄 Documents").run()
-
-
-def test_documents_page_lists_status_visibility_and_failures(
+def test_a_manager_manages_only_their_own_departments_documents(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    app = _documents(monkeypatch, ADMIN)
+    app = _page(monkeypatch, FakeApi(user=MANAGER), ui.DEPARTMENT_DOCUMENTS)
     assert not app.exception
-    assert app.title[0].value == "Documents"
-    text = _all_text(app)
-    assert "Library (2)" in text
-    assert "Factory Health & Safety Manual" in text
-    assert "Company-wide" in text and "Department only" in text
-    assert "9 passages" in text
-    assert ":red-badge[Failed: could not read the PDF]" in text
-    assert ":green-badge[Ready]" in text
-
-
-def test_admins_can_load_the_samples_and_see_manage_buttons(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = _documents(monkeypatch, ADMIN)
+    assert app.title[0].value == "Department documents"
     labels = [b.label for b in app.button]
-    assert "Load the 6 sample documents" in labels
-    assert labels.count("Re-index") == 2
-
-
-def test_a_manager_only_gets_manage_buttons_for_their_own_department(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = _documents(monkeypatch, MANAGER)
-    labels = [b.label for b in app.button]
-    assert "Load the 6 sample documents" not in labels
     assert labels.count("Re-index") == 1  # the safety document, not the HR one
+    assert "Load the 6 sample documents" not in labels
+    text = _all_text(app)
+    assert "Company documents (1 of 1)" in text
 
 
-def test_an_employee_can_only_add_private_documents_and_manage_nothing_here(
+# ---- admin workspace ----
+
+
+def test_the_overview_shows_the_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _run(monkeypatch, FakeApi(user=ADMIN))
+    assert not app.exception
+    metrics = {m.label: m.value for m in app.metric}
+    assert metrics["Accounts"] == "6" and metrics["Disabled"] == "1"
+    assert metrics["Company documents"] == "6" and metrics["Archived documents"] == "1"
+    assert metrics["Employees"] == "3" and metrics["Super Admins"] == "1"
+    rows = app.dataframe[0].value
+    assert list(rows["Department"])[:2] == ["Production", "Maintenance"]
+    text = _all_text(app)
+    assert "Factory Health & Safety Manual" in text
+    assert "Asha Admin: Account disabled (Esha Production)" in text
+
+
+def test_employee_management_lists_everyone_and_protects_your_own_account(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    app = _documents(monkeypatch, EMPLOYEE)
+    app = _page(monkeypatch, FakeApi(user=ADMIN), ui.EMPLOYEES)
+    assert not app.exception
     text = _all_text(app)
-    assert "your own private library" in text
-    assert not app.selectbox or all(s.label != "Add to" for s in app.selectbox)
-    assert "Re-index" not in [b.label for b in app.button]
+    assert "People (3 of 3)" in text and "Asha Admin" in text and "Esha Production" in text
+    labels = [b.label for b in app.button]
+    assert "Disable" in labels and "Enable" in labels  # the employee, the disabled manager
+    assert labels.count("Disable") == 1  # none for your own row
+
+
+def test_employee_management_filters(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _page(monkeypatch, FakeApi(user=ADMIN), ui.EMPLOYEES)
+    next(t for t in app.text_input if t.key == "people-search").set_value("esha").run()
+    assert "People (1 of 3)" in _all_text(app)
+    next(s for s in app.selectbox if s.key == "people-status").select("Disabled").run()
+    assert "People (0 of 3)" in _all_text(app)
+
+
+def test_disabling_a_user_calls_the_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeApi(user=ADMIN)
+    app = _page(monkeypatch, fake, ui.EMPLOYEES)
+    next(b for b in app.button if b.key == "toggle-u-emp").click().run()
+    assert fake.updated == [("u-emp", {"is_active": False})]
+
+
+def test_editing_a_role_and_departments_calls_the_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeApi(user=ADMIN)
+    app = _page(monkeypatch, fake, ui.EMPLOYEES)
+    next(s for s in app.selectbox if s.key == "role-u-emp").select("Department Manager")
+    next(m for m in app.multiselect if m.key == "deps-u-emp").set_value(["Safety", "HR"])
+    next(b for b in app.button if b.key == "save-u-emp").click().run()
+    assert fake.updated == [
+        ("u-emp", {"role": "department_manager", "departments": ["hr", "safety"]})
+    ]
+
+
+def test_the_create_employee_page_shows_a_generated_password_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeApi(user=ADMIN)
+    fake.temporary_password = "Gen3rated-Temp-Pass"
+    app = _page(monkeypatch, fake, ui.CREATE_EMPLOYEE)
+    labels = [t.label for t in app.text_input]
+    assert "Temporary password (optional)" in labels and "Login ID (optional)" in labels
+    next(t for t in app.text_input if t.label == "Email").set_value("new@apex.test")
+    next(t for t in app.text_input if t.label == "Full name").set_value("New Person")
+    app.button[0].click().run()
+    assert fake.created[0][2] is None  # blank means "generate one"
+    assert any(c.value == "Gen3rated-Temp-Pass" for c in app.code)
+    app.run()  # any later interaction: the password is gone
+    assert not any(c.value == "Gen3rated-Temp-Pass" for c in app.code)
+
+
+def test_company_documents_offers_every_management_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeApi(user=ADMIN)
+    fake.documents = [DOCUMENT, FAILED_DOCUMENT, ARCHIVED_DOCUMENT, PERSONAL_DOCUMENT]
+    app = _page(monkeypatch, fake, ui.COMPANY_DOCUMENTS)
+    assert not app.exception
+    text = _all_text(app)
+    assert "Company documents (3 of 3)" in text  # the personal one is not a company document
+    assert ":gray-badge[Archived]" in text and ":green-badge[Ready]" in text
+    labels = [b.label for b in app.button]
+    assert labels.count("Archive") == 2 and labels.count("Restore") == 1
+    assert "Upload new version" in labels and "Show versions" in labels
+
+
+def test_archiving_and_restoring_call_the_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeApi(user=ADMIN)
+    fake.documents = [DOCUMENT, ARCHIVED_DOCUMENT]
+    app = _page(monkeypatch, fake, ui.COMPANY_DOCUMENTS)
+    next(b for b in app.button if b.key == "archive-d1").click().run()
+    next(b for b in app.button if b.key == "restore-d4").click().run()
+    assert fake.document_calls == [("archive", "d1"), ("restore", "d4")]
+
+
+def test_company_documents_can_be_filtered(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeApi(user=ADMIN)
+    fake.documents = [DOCUMENT, FAILED_DOCUMENT, ARCHIVED_DOCUMENT]
+    app = _page(monkeypatch, fake, ui.COMPANY_DOCUMENTS)
+    next(s for s in app.selectbox if s.key == "manage-status").select("Archived").run()
+    assert "Company documents (1 of 3)" in _all_text(app)
+    next(t for t in app.text_input if t.key == "manage-search").set_value("nothing like it").run()
+    assert "No documents match." in _all_text(app)
+
+
+def test_upload_company_documents_lets_a_super_admin_pick_any_department(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _page(monkeypatch, FakeApi(user=ADMIN), ui.UPLOAD_COMPANY)
+    assert not app.exception
+    department = next(s for s in app.selectbox if s.key == "company-department")
+    assert list(department.options) == [
+        "Production",
+        "Maintenance",
+        "HR",
+        "Safety",
+        "Quality Control",
+        "Stores",
+    ]
+    assert [t.key for t in app.text_input if t.key in {"company-title", "company-version"}] == [
+        "company-title",
+        "company-version",
+    ]
+    assert "Load the 6 sample documents" in [b.label for b in app.button]
+
+
+def test_a_manager_can_only_upload_to_their_own_departments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _page(monkeypatch, FakeApi(user=MANAGER), ui.DEPARTMENT_DOCUMENTS)
+    department = next(s for s in app.selectbox if s.key == "company-department")
+    assert list(department.options) == ["Safety"]
+    assert "Load the 6 sample documents" not in [b.label for b in app.button]
+
+
+def test_the_departments_page_shows_all_six(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _page(monkeypatch, FakeApi(user=ADMIN), ui.DEPARTMENTS_PAGE)
+    assert not app.exception
+    text = _all_text(app)
+    for name in ui.DEPARTMENTS.values():
+        assert name in text
+    assert "Managers: none yet" in text or "Managers:" in text
+
+
+def test_the_audit_log_pages_and_filters(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeApi(user=ADMIN)
+    app = _page(monkeypatch, fake, ui.AUDIT_LOGS)
+    assert not app.exception
+    assert "60 entries" in _all_text(app)
+    rows = app.dataframe[0].value
+    assert list(rows["Action"]) == ["Account disabled"] * 3
+    assert list(rows["Who"]) == ["Asha Admin"] * 3
+    assert fake.audit_requests[-1]["page"] == 1
+    next(b for b in app.button if b.key == "audit-older").click().run()
+    assert fake.audit_requests[-1]["page"] == 2
+    next(s for s in app.selectbox if s.key == "audit-outcome").select("denied").run()
+    assert fake.audit_requests[-1].get("outcome") == "denied"
 
 
 # ---- links ----
@@ -802,7 +1155,8 @@ def test_an_employee_can_only_add_private_documents_and_manage_nothing_here(
 def test_a_link_with_a_conversation_id_opens_that_conversation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    app = _app(monkeypatch, FakeApi())
+    app = _app(monkeypatch, FakeApi(user=EMPLOYEE))
+    app.session_state["nav"] = ui.CHAT_MINE
     app.query_params["c"] = "c" * 32
     app.run()
     assert app.session_state["conversation_id"] == "c" * 32
@@ -810,27 +1164,38 @@ def test_a_link_with_a_conversation_id_opens_that_conversation(
 
 
 def test_a_malformed_conversation_link_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _app(monkeypatch, FakeApi(conversations=False))
+    app = _app(monkeypatch, FakeApi(user=EMPLOYEE, conversations=False))
+    app.session_state["nav"] = ui.CHAT_MINE
     app.query_params["c"] = "../../etc/passwd"
     app.run()
     assert "conversation_id" not in app.session_state
     assert not app.exception
 
 
-def test_a_link_can_open_the_documents_page(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _app(monkeypatch, FakeApi())
+@pytest.mark.parametrize(
+    ("user", "title"),
+    [(EMPLOYEE, "My documents"), (ADMIN, "Company documents")],
+)
+def test_an_old_documents_link_opens_the_right_page_for_the_role(
+    monkeypatch: pytest.MonkeyPatch, user: dict[str, Any], title: str
+) -> None:
+    app = _app(monkeypatch, FakeApi(user=user))
     app.query_params["page"] = "documents"
     app.run()
-    assert app.title[0].value == "Documents"
+    assert app.title[0].value == title
 
 
-def test_a_link_to_the_users_page_is_ignored_for_non_admins(
+def test_an_old_users_link_works_for_admins_and_is_ignored_for_others(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    app = _app(monkeypatch, FakeApi(user=EMPLOYEE))
-    app.query_params["page"] = "users"
-    app.run()
-    assert app.title[0].value == "Ask the documents"
+    admin = _app(monkeypatch, FakeApi(user=ADMIN))
+    admin.query_params["page"] = "users"
+    admin.run()
+    assert admin.title[0].value == "Employee management"
+    other = _app(monkeypatch, FakeApi(user=EMPLOYEE))
+    other.query_params["page"] = "users"
+    other.run()
+    assert other.title[0].value == "Welcome, Esha"
 
 
 # ---- first-time setup ----
@@ -886,7 +1251,7 @@ def test_creating_the_first_account_signs_the_person_in(monkeypatch: pytest.Monk
     assert fake.setup_calls == [("boss@apex.test", "The Boss", "a-long-password-1", "")]
     assert fake.login_attempts == [("boss@apex.test", "a-long-password-1")]
     assert fake.login_portals == ["admin"]  # the first account is a Super Admin
-    assert app.title[0].value == "Ask the documents"
+    assert app.title[0].value == "Welcome, Esha"
 
 
 def test_the_token_is_sent_when_required(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -965,7 +1330,7 @@ def test_choosing_a_new_password_continues_into_the_app(monkeypatch: pytest.Monk
     _fill_change(app, "temp-password-1", "my-own-password-9")
     app.button[0].click().run()
     assert fake.change_calls == [("temp-password-1", "my-own-password-9")]
-    assert app.title[0].value == "Ask the documents"
+    assert app.title[0].value == "Welcome, Esha"
 
 
 def test_mismatched_new_passwords_are_caught_before_sending(
@@ -991,25 +1356,6 @@ def test_a_server_refusal_stays_on_the_change_form_in_plain_words(
     assert [t.label for t in app.text_input][0] == "Current (temporary) password"
 
 
-def test_the_generated_password_is_shown_once_after_creating_a_user(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    fake = FakeApi(user=ADMIN)
-    fake.temporary_password = "Gen3rated-Temp-Pass"
-    app = _app(monkeypatch, fake)
-    app.query_params["page"] = "users"
-    app.run()
-    labels = [t.label for t in app.text_input]
-    assert "Temporary password (optional)" in labels
-    next(t for t in app.text_input if t.label == "Email").set_value("new@apex.test")
-    next(t for t in app.text_input if t.label == "Full name").set_value("New Person")
-    app.button[0].click().run()
-    assert fake.created[0][2] is None  # blank means "generate one"
-    assert any(c.value == "Gen3rated-Temp-Pass" for c in app.code)
-    app.run()  # any later interaction: the password is gone
-    assert not any(c.value == "Gen3rated-Temp-Pass" for c in app.code)
-
-
 def test_a_source_the_person_can_no_longer_read_shows_a_plain_notice(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1029,7 +1375,9 @@ def test_a_source_the_person_can_no_longer_read_shows_a_plain_notice(
             answer = {**ANSWER, "sources": [*ANSWER["sources"], gone]}  # type: ignore[dict-item]
             return {"id": conversation_id, "title": "t", "messages": [QUESTION, answer]}
 
-    app = _run(monkeypatch, WithGoneSource(), select_conversation=True)
+    app = _page(monkeypatch, WithGoneSource(user=EMPLOYEE), ui.COMPANY_KNOWLEDGE)
+    app.session_state["conversation_id"] = "c" * 32
+    app.run()
     assert not app.exception
     text = _all_text(app)
     assert "no longer available to you" in text

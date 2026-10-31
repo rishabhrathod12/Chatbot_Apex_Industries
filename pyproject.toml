@@ -64,7 +64,16 @@ python_version = "3.12"
 strict = true
 mypy_path = "backend:frontend"
 packages = ["app", "eval"]
-modules = ["api_client", "ui", "auth_views", "streamlit_app"]
+modules = [
+    "api_client",
+    "ui",
+    "auth_views",
+    "chat_views",
+    "document_views",
+    "admin_views",
+    "employee_views",
+    "streamlit_app",
+]
 explicit_package_bases = true
 
 [tool.ruff.lint.per-file-ignores]

@@ -172,12 +172,15 @@ class ApiClient:
         scope: str,
         department: str | None,
         company_wide: bool = False,
+        details: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
+        """`details` (title, description, document_type, version) are for company documents."""
         data = {"scope": scope}
         if department:
             data["department"] = department
         if scope == "enterprise":
             data["visibility"] = "company" if company_wide else "department"
+            data.update({k: v for k, v in (details or {}).items() if v})
         body = self._request(
             "POST",
             "/documents",
@@ -185,6 +188,29 @@ class ApiClient:
             files=[("files", (name, content)) for name, content in files],
         )
         return list(body["results"])
+
+    def archive_document(self, document_id: str) -> None:
+        self._request("POST", f"/documents/{document_id}/archive")
+
+    def restore_document(self, document_id: str) -> None:
+        self._request("POST", f"/documents/{document_id}/restore")
+
+    def upload_version(
+        self, document_id: str, filename: str, content: bytes, details: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        """Replace a company document with a new file (the old one stays until the new is ready)."""
+        data = {k: v for k, v in (details or {}).items() if v}
+        return dict(
+            self._request(
+                "POST",
+                f"/documents/{document_id}/versions",
+                data=data,
+                files={"file": (filename, content)},
+            )
+        )
+
+    def list_versions(self, document_id: str) -> list[dict[str, Any]]:
+        return list(self._request("GET", f"/documents/{document_id}/versions"))
 
     def reindex(self, document_id: str) -> None:
         self._request("POST", f"/documents/{document_id}/reindex")
@@ -251,3 +277,13 @@ class ApiClient:
         result = self._request("POST", f"/users/{user_id}/password", json={"password": password})
         temporary = result.get("temporary_password") if isinstance(result, dict) else None
         return str(temporary) if temporary else None
+
+    # ------------------------------------------------------------------ admin dashboard
+
+    def admin_stats(self) -> dict[str, Any]:
+        return dict(self._request("GET", "/admin/stats"))
+
+    def admin_audit(self, page: int = 1, page_size: int = 25, **filters: str) -> dict[str, Any]:
+        params: dict[str, Any] = {"page": page, "page_size": page_size}
+        params.update({k: v for k, v in filters.items() if v})
+        return dict(self._request("GET", "/admin/audit", params=params))

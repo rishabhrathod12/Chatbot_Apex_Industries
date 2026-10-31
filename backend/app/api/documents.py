@@ -1,5 +1,6 @@
 import logging
 import re
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import (
@@ -34,9 +35,10 @@ from app.rag.ingestion.pipeline import (
     run_ingestion,
 )
 from app.repositories import documents as repo
-from app.schemas.document import DocumentOut, UploadResponse
+from app.schemas.document import DocumentOut, UploadResponse, UploadResult
 from app.services import audit
 from app.services import documents as service
+from app.services.file_validation import sanitize_filename
 
 logger = logging.getLogger("app.documents")
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -71,6 +73,10 @@ def _manageable_or_403(db: Session, principal: Principal, document: Document, ac
             target_id=document.id,
         )
         raise HTTPException(status_code=403, detail="not_allowed")
+
+
+def _allowed_for_personal(filename: str | None, settings: Settings) -> bool:
+    return Path(sanitize_filename(filename)).suffix.lower() in settings.personal_upload_extensions
 
 
 _VERSION = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
@@ -144,8 +150,12 @@ def upload_documents(
         dept = ""
         stored_visibility = "personal"
 
-    results = [
-        service.store_upload(
+    def handle(f: UploadFile) -> UploadResult:
+        if scope == "personal" and not _allowed_for_personal(f.filename, settings):
+            return UploadResult(
+                filename=sanitize_filename(f.filename), status="rejected", reason="pdf_only"
+            )
+        return service.store_upload(
             db,
             f,
             scope=scope,
@@ -155,8 +165,8 @@ def upload_documents(
             settings=settings,
             **metadata,
         )
-        for f in files
-    ]
+
+    results = [handle(f) for f in files]
 
     for result in results:
         if result.status == "accepted" and result.document is not None:

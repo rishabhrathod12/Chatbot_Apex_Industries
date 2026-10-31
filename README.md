@@ -44,8 +44,17 @@ One command starts the API and the web interface and opens the browser:
 The first page offers two sign-in options, **Employee Login** and **Super Admin Login** (a bookmark such as
 `http://localhost:8501/?portal=admin` opens one directly). Both ask for a Login ID (an email works too) and a password. The
 choice is only a convenience: the server checks the account's real role and refuses an account that belongs to the other
-portal. Someone given a temporary password is asked to choose their own before anything else. Sign in, then (as a Super Admin) open **Documents**, click *Load the 6 sample documents*, wait for each to show **Ready**, and
-go to **Chat**. What each person can see depends on their role and departments (see `docs/security.md`). Only one API process can use the vector folder at a time, so close an old API
+portal. Someone given a temporary password is asked to choose their own before anything else. After signing in you see a workspace that matches your account:
+
+- **Employees** (and department managers): Dashboard, Upload PDF, My Documents, Chat with My Documents, Company
+  Knowledge (ask, or browse the company documents you may read) and Conversation History. Staff add their own
+  documents as PDFs only. Managers also get Department Documents for their departments.
+- **Super Admins**: Overview (account, department and document numbers, recent activity), Employee Management,
+  Create Employee, Company Documents (details, archive/restore, new versions), Upload Company Documents,
+  Departments and Audit Logs.
+
+Sign in, then (as a Super Admin) open **Upload Company Documents**, click *Load the 6 sample documents*, wait for each to show **Ready**, and
+try **Ask Company Documents**. What each person can see depends on their role and departments (see `docs/security.md`). Only one API process can use the vector folder at a time, so close an old API
 window before starting another. Set `API_BASE_URL` if the API runs somewhere else.
 
 Links work as bookmarks: `http://localhost:8501/?page=documents` opens the library and
