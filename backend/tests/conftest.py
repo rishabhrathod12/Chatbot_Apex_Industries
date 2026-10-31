@@ -1,4 +1,5 @@
 import io
+import os
 import shutil
 import zipfile
 from collections.abc import Iterator, Sequence
@@ -29,10 +30,13 @@ SAMPLE_DOCS = Path(__file__).resolve().parents[2] / "data" / "sample_docs"
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Iterator[Settings]:
+    # TEST_DATABASE_URL runs the whole suite on another database (PostgreSQL). Every table is
+    # dropped after each test, so use a scratch database, never one holding real data.
+    database_url = os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{tmp_path / 'test.db'}"
     value = Settings(
         _env_file=None,  # type: ignore[call-arg]
         app_env="test",
-        database_url=f"sqlite:///{tmp_path / 'test.db'}",
+        database_url=database_url,
         upload_dir=str(tmp_path / "uploads"),
         vector_store_path=str(tmp_path / "vectors"),
         embedding_provider="hashing",  # offline: no API key and no network in the normal suite
@@ -47,6 +51,10 @@ def settings(tmp_path: Path) -> Iterator[Settings]:
     )
     yield value
     close_client(value.vector_store_path)  # embedded Qdrant locks its folder until closed
+    if not value.database_url.startswith("sqlite"):
+        engine = get_engine(value.database_url)
+        Base.metadata.drop_all(engine)
+        engine.dispose()
 
 
 @pytest.fixture(autouse=True)

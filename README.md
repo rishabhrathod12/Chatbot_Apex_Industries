@@ -54,6 +54,9 @@ alembic upgrade head        # creates storage/app.db (SQLite) by default
 uvicorn app.main:app --reload
 ```
 
+SQLite is the default. To use PostgreSQL set `DATABASE_URL=postgresql://...` in `.env`; install, data copy and
+testing steps are in `docs/postgres-setup.md`.
+
 ## Embeddings
 
 Set `OPENAI_API_KEY` in `.env` to embed with OpenAI (`text-embedding-3-small`). To run fully offline

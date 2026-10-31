@@ -9,6 +9,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
+def normalize_database_url(url: str) -> str:
+    """Accept the usual PostgreSQL spellings and pin them to the psycopg 3 driver."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url.removeprefix(prefix)
+    return url
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
@@ -60,6 +68,13 @@ class Settings(BaseSettings):
     # use WITH reranking, which judges relevance properly. Without reranking the right value is
     # about 0.40 (see docs/retrieval-baseline.md; a looser gate then lets weak matches through).
     retrieval_min_score: float = 0.25
+
+    @model_validator(mode="after")
+    def _check_database_url(self) -> "Settings":
+        self.database_url = normalize_database_url(self.database_url)
+        if not self.database_url.startswith(("sqlite:///", "postgresql+psycopg://")):
+            raise ValueError("DATABASE_URL must start with sqlite:/// or postgresql://")
+        return self
 
     @model_validator(mode="after")
     def _require_secrets_in_production(self) -> "Settings":

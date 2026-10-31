@@ -18,7 +18,10 @@ def get_engine(database_url: str) -> Engine:
     if database_url.startswith("sqlite:///"):
         db_path = Path(database_url.removeprefix("sqlite:///"))
         db_path.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(database_url)
+        return create_engine(database_url)
+    # PostgreSQL: check a pooled connection is alive before using it, so a database restart or an
+    # idle timeout on the server doesn't surface as a failed request.
+    return create_engine(database_url, pool_pre_ping=True, pool_size=5, max_overflow=10)
 
 
 def get_db(settings: Settings = Depends(get_settings)) -> Iterator[Session]:

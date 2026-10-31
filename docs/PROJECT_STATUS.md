@@ -18,7 +18,7 @@
 | M7 | Basic RAG + first golden set | Done locally 2026-10-31 (committed, not pushed). Verified with real embeddings and `gpt-4.1-mini`; known weakness on near-miss questions, see `docs/retrieval-baseline.md` |
 | M8 | Citations and conversational memory | Done locally 2026-10-31. Follow-ups resolved 3/3 with the real model |
 | M9 | Streamlit frontend | First version done 2026-10-31 (chat, sources, conversations, documents). Not yet: login (M11), polish for phones, accessibility review |
-| M10 | PostgreSQL and enterprise document management | Not started |
+| M10 | PostgreSQL and enterprise document management | Scope: Postgres migration only. Code and tests written 2026-10-31, **not yet verified on a real PostgreSQL** (none installed). See docs/postgres-setup.md |
 | M11 | Authentication, RBAC, department permissions | Done locally 2026-10-31. Security report: docs/security-test-report.md |
 | M12 | Hybrid search and reranking | Done locally 2026-10-31. Measured against M7: see docs/retrieval-baseline.md section 6 |
 | M13 | RAGAS evaluation | Built and tested offline 2026-10-31 (separate `.venv-eval`). No real scores yet: needs OPENAI_API_KEY. See docs/ragas-evaluation.md |

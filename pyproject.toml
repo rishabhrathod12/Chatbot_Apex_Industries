@@ -15,6 +15,7 @@ dependencies = [
     "openai>=1.40",
     "qdrant-client>=1.12,<2",
     "pyjwt>=2.8",
+    "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]
