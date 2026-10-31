@@ -22,7 +22,7 @@
 | M11 | Authentication, RBAC, department permissions | Done locally 2026-10-31. Security report: docs/security-test-report.md |
 | M12 | Hybrid search and reranking | Done locally 2026-10-31. Measured against M7: see docs/retrieval-baseline.md section 6 |
 | M13 | RAGAS evaluation | Built and tested offline 2026-10-31 (separate `.venv-eval`). No real scores yet: needs OPENAI_API_KEY. See docs/ragas-evaluation.md |
-| M14 | Docker, deployment, monitoring, hardening | Not started |
+| M14 | Docker, deployment, monitoring, hardening | Files written 2026-10-31 (Dockerfile, compose, health checks, security headers). **Docker never run** (not installed). No TLS, CI, metrics or backups yet. See docs/deployment.md |
 
 ## Environment facts (checked 2026-10-30)
 

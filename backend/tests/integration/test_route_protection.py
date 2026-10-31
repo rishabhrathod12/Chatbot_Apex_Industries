@@ -14,6 +14,7 @@ from app.core.config import Settings
 
 PUBLIC = {
     ("GET", "/api/v1/health"),
+    ("GET", "/api/v1/health/ready"),  # for Docker/load balancers; says ok/failed only
     ("POST", "/api/v1/auth/login"),
     ("POST", "/api/v1/auth/refresh"),
     ("POST", "/api/v1/auth/logout"),

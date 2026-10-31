@@ -1,0 +1,29 @@
+# Secrets and local data never go into an image.
+.env
+.env.*
+!.env.example
+storage/
+vector_db/
+*.db
+*.sqlite3
+
+# Environments, caches, tooling
+.venv/
+.venv-eval/
+apex/
+.git/
+.github/
+.vscode/
+.idea/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+frontend/package-lock.json
+
+# Not needed at runtime
+backend/tests/
+eval/
+docs/

@@ -46,6 +46,11 @@ window before starting another. Set `API_BASE_URL` if the API runs somewhere els
 Links work as bookmarks: `http://localhost:8501/?page=documents` opens the library and
 `http://localhost:8501/?c=<conversation id>` opens a saved chat.
 
+## Docker
+
+`docker compose up -d --build` starts PostgreSQL, the API and the web interface. Required `.env` values, first
+admin, health checks and what is still missing before real users (TLS above all): `docs/deployment.md`.
+
 ## Database
 
 ```powershell

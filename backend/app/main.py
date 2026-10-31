@@ -13,6 +13,16 @@ from app.core.rate_limit import LoginLimiter
 
 logger = logging.getLogger("app.request")
 
+# This is a JSON API, never a web page, so it can forbid framing, sniffing and caching outright.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+}
+DOC_PAGES = {"/docs", "/redoc"}
+
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -49,6 +59,10 @@ def create_app() -> FastAPI:
             )
         else:
             response.headers["X-Request-ID"] = request_id
+            for name, value in SECURITY_HEADERS.items():
+                if name == "Content-Security-Policy" and request.url.path in DOC_PAGES:
+                    continue  # development-only API pages load their viewer from a CDN
+                response.headers.setdefault(name, value)
             logger.info(
                 "request completed",
                 extra={
