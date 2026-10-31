@@ -16,14 +16,22 @@ import chat_views
 import document_views
 import employee_views
 import ui
-from api_client import ApiClient, SessionExpired, base_url
+from api_client import REQUIRED_API_LEVEL, ApiClient, SessionExpired, base_url
 
 KNOWLEDGE_VIEWS = ["Ask a question", "Browse documents"]
 
 
 def api() -> ApiClient:
-    if "api" not in st.session_state:
+    """This browser session's API client.
+
+    Streamlit keeps `st.session_state` when the code is edited and reloaded, so a page left open
+    can still hold a client made by an OLDER copy of `ApiClient` (missing newer methods such as
+    `api_level`). A client that was not made by the current class is dropped and replaced; the
+    person simply signs in again. Nothing else about sessions changes.
+    """
+    if st.session_state.get("api_class") is not ApiClient:
         st.session_state["api"] = ApiClient()
+        st.session_state["api_class"] = ApiClient
     client: ApiClient = st.session_state["api"]
     return client
 
@@ -186,6 +194,21 @@ def main() -> None:
         st.caption(f"Expected at `{base_url()}`")
         st.markdown("Start it from the repository root, then reload this page:")
         st.code("scripts\\dev.ps1", language="powershell")
+        st.stop()
+
+    level = api().api_level()
+    if level is None or level < REQUIRED_API_LEVEL:
+        st.title("Apex Knowledge Assistant")
+        st.error(
+            "The API running on this computer is an older copy than this page, so signing in "
+            "would fail. Close its window and start both again.",
+            icon="\u26a0\ufe0f",
+        )
+        st.code("scripts\\dev.ps1 -Restart", language="powershell")
+        reported = "unknown" if level is None else level
+        st.caption(
+            f"API at `{base_url()}` reports level {reported}; this page needs {REQUIRED_API_LEVEL}."
+        )
         st.stop()
 
     if not api().is_logged_in:

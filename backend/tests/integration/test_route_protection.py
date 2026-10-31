@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
+from app.api.health import API_LEVEL
 from app.core.config import Settings
 
 PUBLIC = {
@@ -71,7 +72,7 @@ def test_the_public_list_is_exactly_what_we_expect(raw_client: TestClient) -> No
 
 
 def test_the_public_endpoints_do_not_leak_anything_secret(raw_client: TestClient) -> None:
-    assert raw_client.get("/api/v1/health").json() == {"status": "ok"}
+    assert raw_client.get("/api/v1/health").json() == {"status": "ok", "api_level": API_LEVEL}
 
 
 def test_api_documentation_is_not_served_in_production(

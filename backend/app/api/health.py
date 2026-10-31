@@ -14,10 +14,15 @@ logger = logging.getLogger("app.health")
 router = APIRouter(tags=["health"])
 
 
+# Bumped when the API changes in a way the web pages depend on. The page compares it with the
+# level it needs and says so plainly if the API running on the machine is an older copy.
+API_LEVEL = 2
+
+
 @router.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, str | int]:
     """Liveness: the process is up and answering. Does not touch anything else."""
-    return {"status": "ok"}
+    return {"status": "ok", "api_level": API_LEVEL}
 
 
 @router.get("/health/ready", response_model=None)

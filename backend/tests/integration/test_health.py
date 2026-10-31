@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
 
+from app.api.health import API_LEVEL
 from app.main import create_app
 
 
@@ -8,7 +9,7 @@ def test_health_returns_ok_with_request_id() -> None:
     client = TestClient(create_app())
     response = client.get("/api/v1/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "api_level": API_LEVEL}
     assert response.headers["X-Request-ID"]
 
 

@@ -3,6 +3,7 @@
     python -m app.cli create-user --email you@company.com --name "Your Name" --role super_admin
     python -m app.cli seed-demo        # development only: six demo users, one shared password
     python -m app.cli copy-db --from sqlite:///./storage/app.db   # into DATABASE_URL (Postgres)
+    python -m app.cli reset-password --login-id someone           # new one-time password
 
 There is no built-in account and no default password. The first Super Admin is created here.
 Passwords are typed at a hidden prompt (or read from an environment variable) and are never
@@ -100,6 +101,37 @@ def _seed_demo(settings: Settings) -> int:
     return 0
 
 
+def _reset_password(settings: Settings, args: argparse.Namespace) -> int:
+    """Give an existing account a new one-time password and make them choose their own.
+
+    For when a password is lost or has been exposed and no other Super Admin can reset it. All
+    their sessions end. The new password is printed once, here, and nowhere else.
+    """
+    chosen: str | None = None
+    if args.password_env:
+        chosen = os.environ.get(args.password_env, "")
+        if not chosen:
+            raise SystemExit(f"Environment variable {args.password_env} is empty or not set.")
+    with get_session_factory(settings.database_url)() as db:
+        user = repo.get_by_identifier(db, args.login_id)
+        if user is None:
+            print("No account matches that Login ID or email.", file=sys.stderr)
+            return 1
+        try:
+            temporary = user_service.reset_password(db, settings, None, user, chosen)
+        except user_service.UserError as exc:
+            print(f"Nothing was changed: {exc.reason}", file=sys.stderr)
+            return 1
+        login_id = user.login_id
+    print(f"Password reset for {login_id}. Their sessions have ended.")
+    if temporary:
+        print("One-time password (shown once; sign in with it, then choose your own):\n")
+        print(f"    {temporary}\n")
+    else:
+        print("They must choose a new password at their next sign-in.")
+    return 0
+
+
 def _copy_db(settings: Settings, args: argparse.Namespace) -> int:
     source_url = normalize_database_url(args.source)
     if source_url == settings.database_url:
@@ -139,12 +171,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--from", dest="source", required=True, help="e.g. sqlite:///./storage/app.db"
     )
 
+    reset = commands.add_parser(
+        "reset-password",
+        help="new one-time password for an existing account (they must change it at sign-in)",
+    )
+    reset.add_argument("--login-id", required=True, help="Login ID or email of the account")
+    reset.add_argument(
+        "--password-env", help="use the password in this environment variable instead of a new one"
+    )
+
     args = parser.parse_args(argv)
     settings = get_settings()
     if args.command == "create-user":
         return _create(settings, args)
     if args.command == "copy-db":
         return _copy_db(settings, args)
+    if args.command == "reset-password":
+        return _reset_password(settings, args)
     return _seed_demo(settings)
 
 

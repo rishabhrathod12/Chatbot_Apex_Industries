@@ -12,6 +12,10 @@ import httpx
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8000/api/v1"
 
+# The API level (reported by GET /health) this page needs. An API that reports less, or nothing,
+# is an older copy still running: the page says so instead of failing in confusing ways.
+REQUIRED_API_LEVEL = 2
+
 
 class ApiError(Exception):
     """The backend refused or failed a request. `detail` is its short machine-readable reason."""
@@ -131,10 +135,16 @@ class ApiClient:
                 body = response.json()
                 if isinstance(body, dict) and isinstance(body.get("detail"), str):
                     detail = body["detail"]
+                elif isinstance(body, dict) and isinstance(body.get("detail"), list):
+                    # A validation problem (HTTP 422): the API did not understand what we sent,
+                    # which in practice means it is an older or newer version than this page.
+                    detail = "request_not_understood"
                 elif isinstance(body, dict) and "results" in body:
                     return body  # an upload where every file was rejected still has a useful body
             except ValueError:
                 pass
+            if detail == "unknown_error" and response.status_code >= 500:
+                detail = "server_error"
             retry = response.headers.get("retry-after", "")
             raise ApiError(response.status_code, detail, int(retry) if retry.isdigit() else None)
         return response.json() if response.content else None
@@ -156,6 +166,14 @@ class ApiClient:
         raise SessionExpired  # not reached
 
     # ------------------------------------------------------------------ health and documents
+
+    def api_level(self) -> int | None:
+        """The API's level, or None if it does not say (an older copy) or cannot be reached."""
+        try:
+            level = self._send("GET", "/health").get("api_level")
+        except (ApiUnreachable, ApiError, AttributeError):
+            return None
+        return level if isinstance(level, int) else None
 
     def healthy(self) -> bool:
         try:

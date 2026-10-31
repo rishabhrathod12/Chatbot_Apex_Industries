@@ -171,9 +171,10 @@ def _update_user(db: Session, actor: Principal, user: User, data: UserUpdate) ->
 
 
 def reset_password(
-    db: Session, settings: Settings, actor: Principal, user: User, password: str | None
+    db: Session, settings: Settings, actor: Principal | None, user: User, password: str | None
 ) -> str | None:
-    """An admin sets a new password. The person must replace it at their next sign-in.
+    """An admin (or the command line, with `actor` None) sets a new password. The person must
+    replace it at their next sign-in.
 
     Returns the password only if the server generated it (shown to the admin once).
     """
@@ -185,6 +186,11 @@ def reset_password(
     repo.revoke_all_refresh_tokens(db, user.id)  # old sessions end when the password changes
     db.commit()
     audit.record(
-        db, "password_reset", "ok", user_id=actor.user_id, target_type="user", target_id=user.id
+        db,
+        "password_reset",
+        "ok",
+        user_id=actor.user_id if actor else None,
+        target_type="user",
+        target_id=user.id,
     )
     return new_password if generated else None

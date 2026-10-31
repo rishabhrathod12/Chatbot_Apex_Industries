@@ -41,6 +41,15 @@ One command starts the API and the web interface and opens the browser:
 .\scripts\dev.ps1          # web interface http://localhost:8501, API docs http://localhost:8000/docs
 ```
 
+`dev.ps1` refuses to start if ports 8000 or 8501 are already taken (an old copy of the app still running would
+keep answering with old code and sign-in would fail with confusing errors). Close the old windows, or run
+`.\scripts\dev.ps1 -Restart` to stop them and start fresh. The web page also checks the API's version and says so
+plainly when the API is an older copy.
+
+**Lost or exposed password?** On the computer running the app: `.venv\Scripts\python.exe -m app.cli reset-password --login-id <their Login ID or email>`.
+It ends all their sessions, prints a one-time password once, and makes them choose their own at the next sign-in.
+Run it in your own terminal and do not paste or screenshot its output.
+
 The first page offers two sign-in options, **Employee Login** and **Super Admin Login** (a bookmark such as
 `http://localhost:8501/?portal=admin` opens one directly). Both ask for a Login ID (an email works too) and a password. The
 choice is only a convenience: the server checks the account's real role and refuses an account that belongs to the other

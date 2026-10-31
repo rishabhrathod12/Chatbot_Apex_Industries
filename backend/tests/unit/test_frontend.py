@@ -235,7 +235,7 @@ def test_error_bodies_that_are_not_json_are_handled() -> None:
 
     with pytest.raises(ApiError) as exc:
         _client(handler).list_documents()
-    assert exc.value.detail == "unknown_error"
+    assert exc.value.detail == "server_error"
 
 
 def test_upload_with_every_file_rejected_still_returns_per_file_results() -> None:
@@ -280,7 +280,7 @@ def test_status_badges() -> None:
 def test_error_messages_are_friendly() -> None:
     assert "OPENAI_API_KEY" in ui.error_message(ApiError(503, "llm_not_configured"))
     assert "permission" in ui.error_message(ApiError(403, "not_allowed"))
-    assert "(weird)" in ui.error_message(ApiError(500, "weird"))
+    assert "(weird, HTTP 500)" in ui.error_message(ApiError(500, "weird"))
 
 
 def test_images_and_link_addresses_are_removed_from_model_output() -> None:
@@ -493,8 +493,10 @@ class FakeApi:
         user: dict[str, Any] | None = ADMIN,
         healthy: bool = True,
         conversations: bool = True,
+        level: int | None = api_client.REQUIRED_API_LEVEL,
     ) -> None:
         self._healthy = healthy
+        self._level = level
         self.user = user
         self.is_logged_in = user is not None
         self.conversations = (
@@ -534,6 +536,9 @@ class FakeApi:
 
     def healthy(self) -> bool:
         return self._healthy
+
+    def api_level(self) -> int | None:
+        return self._level
 
     def login(self, email: str, password: str, portal: str | None = None) -> dict[str, Any]:
         self.login_attempts.append((email, password))
@@ -1382,3 +1387,129 @@ def test_a_source_the_person_can_no_longer_read_shows_a_plain_notice(
     text = _all_text(app)
     assert "no longer available to you" in text
     assert "APM-HSE-MAN-003" in text  # the readable source is still shown
+
+
+# ---- an old API copy, and errors that say what is wrong ----
+
+
+def _respond(code: int, /, **body: Any) -> ApiClient:
+    """A client whose API always answers with this HTTP code and JSON body."""
+    return _client(lambda request: httpx.Response(code, json=body), logged_in=False)
+
+
+def test_a_validation_problem_is_named_not_called_unknown() -> None:
+    """HTTP 422 carries a list of problems. That used to surface as "unknown_error"."""
+    client = _respond(422, detail=[{"type": "missing", "loc": ["body", "email"], "msg": "x"}])
+    with pytest.raises(ApiError) as exc:
+        client.login("someone", "a-password-1", portal="admin")
+    assert (exc.value.status, exc.value.detail) == (422, "request_not_understood")
+    text = ui.error_message(exc.value)
+    assert "older copy" in text and "dev.ps1 -Restart" in text
+
+
+def test_a_server_failure_without_a_reason_is_named() -> None:
+    client = _respond(500, error="internal_server_error", request_id="abc123")
+    with pytest.raises(ApiError) as exc:
+        client.login("a", "b")
+    assert exc.value.detail == "server_error"
+    assert "API window" in ui.error_message(exc.value)
+
+
+def test_a_reason_the_api_gives_is_still_used_as_it_is() -> None:
+    with pytest.raises(ApiError) as exc:
+        _respond(401, detail="invalid_credentials").login("a", "b")
+    assert exc.value.detail == "invalid_credentials"
+
+
+def test_unlisted_errors_show_their_status_too() -> None:
+    assert "HTTP 418" in ui.error_message(ApiError(418, "teapot"))
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [({"status": "ok", "api_level": 2}, 2), ({"status": "ok"}, None), ({"api_level": "2"}, None)],
+)
+def test_the_api_level_is_read_from_the_health_reply(
+    body: dict[str, Any], expected: int | None
+) -> None:
+    assert _respond(200, **body).api_level() == expected
+
+
+def test_an_unreachable_api_has_no_level() -> None:
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused")
+
+    assert _client(refuse, logged_in=False).api_level() is None
+
+
+@pytest.mark.parametrize("level", [None, api_client.REQUIRED_API_LEVEL - 1])
+def test_an_old_api_copy_stops_the_page_before_sign_in(
+    monkeypatch: pytest.MonkeyPatch, level: int | None
+) -> None:
+    app = _run(monkeypatch, FakeApi(user=None, level=level))
+    assert not app.exception
+    assert any("older copy" in e.value for e in app.error)
+    assert "scripts\\dev.ps1 -Restart" in [c.value for c in app.code]
+    assert not app.text_input and not app.button  # no sign-in form to fail confusingly
+
+
+def test_a_current_api_shows_the_normal_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _run(monkeypatch, FakeApi(user=None))
+    assert not any("older copy" in e.value for e in app.error)
+    assert [b.label for b in app.button] == ["Continue as employee", "Continue as Super Admin"]
+
+
+# ---- a page left running while the code was edited ----
+
+
+class ClientFromOlderCode:
+    """What Streamlit still holds in a session after a code reload: an object made by the old copy
+    of the class, from before `api_level` existed."""
+
+    user = None
+    is_logged_in = False
+
+    def healthy(self) -> bool:
+        return True
+
+
+def test_a_client_left_over_from_older_code_is_replaced_not_used(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: "AttributeError: 'ApiClient' object has no attribute 'api_level'"."""
+    fake = FakeApi(user=None)
+    app = _app(monkeypatch, fake)
+    app.session_state["api"] = ClientFromOlderCode()  # kept by the browser session across a reload
+    app.run()
+    assert not app.exception
+    assert app.session_state["api"] is fake  # the old object was dropped, a current one made
+    assert [b.label for b in app.button] == ["Continue as employee", "Continue as Super Admin"]
+
+
+def test_a_reload_of_the_client_code_signs_the_person_out_instead_of_crashing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = FakeApi(user=EMPLOYEE)
+    app = _app(monkeypatch, first)
+    app.run()
+    assert app.title[0].value == "Welcome, Esha"
+    assert app.session_state["api"] is first
+
+    # The module is reloaded: `ApiClient` is now a different class object. The signed-in client
+    # belongs to the old class, so it must not be used for the new code.
+    second = FakeApi(user=None)
+    monkeypatch.setattr(api_client, "ApiClient", lambda *a, **k: second)
+    app.run()
+    assert not app.exception
+    assert app.session_state["api"] is second
+    assert [b.label for b in app.button] == ["Continue as employee", "Continue as Super Admin"]
+
+
+def test_an_ordinary_rerun_keeps_the_signed_in_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeApi(user=ADMIN)
+    app = _app(monkeypatch, fake)
+    app.run()
+    app.run()
+    app.sidebar.radio[0].set_value(ui.EMPLOYEES).run()
+    assert app.session_state["api"] is fake
+    assert app.title[0].value == "Employee management"  # still signed in, nothing recreated

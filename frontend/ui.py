@@ -50,6 +50,14 @@ _ERROR_TEXT = {
     "password_required": "Please enter a password.",
     "login_id_taken": "That Login ID is already used.",
     "password_change_required": "Please choose a new password first.",
+    "request_not_understood": (
+        "The API did not understand that request. It is probably an older copy than this page: "
+        "close its window and start both again with scripts\\dev.ps1 -Restart."
+    ),
+    "server_error": (
+        "The server hit an unexpected problem. Look at the API window for the error "
+        "(it shows the request id)."
+    ),
     "invalid_setup_token": "That setup token is not correct.",
     "setup_already_done": "An account already exists. Please sign in.",
     "setup_disabled": "Setup from this page is switched off. See the instructions above.",
@@ -89,7 +97,9 @@ _FAILURE_TEXT = {
 
 
 def error_message(error: ApiError) -> str:
-    return _ERROR_TEXT.get(error.detail, f"Something went wrong ({error.detail}).")
+    return _ERROR_TEXT.get(
+        error.detail, f"Something went wrong ({error.detail}, HTTP {error.status})."
+    )
 
 
 def reject_message(reason: str | None) -> str:

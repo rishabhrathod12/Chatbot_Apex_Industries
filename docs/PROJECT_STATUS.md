@@ -55,6 +55,7 @@ See `docs/decisions/ADR-0001-initial-decisions.md`, section "Pending".
 
 ## Known issues and gaps
 
+- An old copy of the API or web page left running from an earlier session answers with old code. `scripts\dev.ps1` now refuses to start over it (use `-Restart`), and the page reports an out-of-date API (`api_level` in `GET /health`) instead of failing at sign-in with `unknown_error`.
 - M10 and M14 have never run against the real thing (Postgres, Docker). Expect small first-run fixes.
 - The new web pages were only tested with Streamlit's test runner: no real-browser check of layout, spacing, the pop-ups or the 3 to 4 second auto-refresh of document lists.
 - Old conversations: citations are blanked when access is lost, but the stored answer text is not rewritten.

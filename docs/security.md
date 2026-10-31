@@ -84,6 +84,10 @@ There is no built-in account and no default password. The first Super Admin is c
 - `POST /auth/change-password` needs the current password (wrong guesses count toward a lockout, answered 422 not 401 so the app does not mistake it for an expired session), refuses a too-short or unchanged password, ends all other sessions, and returns a new one. A reset also ends the person's sessions. Both are audited (`password_change`, `password_reset`) without secrets.
 - New Login IDs are made from the name (`Esha Production` becomes `esha.production`, numbered if taken) unless the admin picks one. Demo users from `seed-demo` are development-only and are not forced to change.
 
+### Lost or exposed passwords
+
+`python -m app.cli reset-password --login-id <Login ID or email>` is for the server operator (it needs access to the machine and its `.env`, so it is not a web endpoint). It generates a one-time password, ends every session of that account, sets the forced password change, and records `password_reset` in the audit log with no signed-in actor. The password is printed once to the operator's terminal and is never written to a log, the audit log or the database (only its hash is stored). `--password-env NAME` uses a password of the operator's choosing instead (it still must be changed at sign-in). Any password that has been shown on a screen, in a screenshot or in a chat should be treated as compromised and reset.
+
 ### Sign-in portals and the last Super Admin
 
 - The sign-in page can send `portal: "employee" | "admin"`. The server compares it with the role stored in the database (admin page: Super Admin only; employee page: employees and department managers). A mismatch is refused with the same `401 invalid_credentials` as a wrong password, counts toward the lockout, and is audited (`login`/`failed`, target type `portal`). It is checked only after the password is correct. **The portal can only make the server refuse a login; it never grants a role.** Extra fields such as `role` in the request are ignored. Leaving `portal` out skips the check (older clients, scripts); it is not a way to gain access.
