@@ -2,7 +2,7 @@
 
 **Project:** Manufacturing AI Knowledge Assistant, Apex Precision Manufacturing Pvt. Ltd.
 **Last updated:** 2026-10-31
-**Current state:** every milestone M0 to M14 has code, and so does the 9-phase authentication and interface redesign (below). Everything up to redesign phase 8 is on GitHub (`origin/main`); phase 9 (the final authorization sweep and these documents) is the latest work. Two milestones still have never run for real (M10 Postgres, M14 Docker), and **nobody has looked at the new web pages in a browser yet**.
+**Current state:** every milestone M0 to M14 has code, and so does the 9-phase authentication and interface redesign (below). All nine redesign phases are on GitHub (`origin/main`). Two milestones still have never run for real (M10 Postgres, M14 Docker), and **nobody has looked at the new web pages in a browser yet**.
 
 ## Milestone tracker
 
@@ -36,7 +36,7 @@
 | 6 | New document versions with no search gap, redaction of old citations (migration 0008) | Pushed |
 | 7 | Landing page with Employee and Super Admin cards, sign-in screens | Pushed |
 | 8 | Employee and Super Admin workspaces, PDF-only personal uploads | Pushed |
-| 9 | Final authorization sweep (111 tests, 11 deliberate-break checks all caught), documents brought up to date | Done, **not yet committed** |
+| 9 | Final authorization sweep (111 tests, 11 deliberate-break checks all caught), documents brought up to date | Pushed |
 
 Decisions made by default because they were not answered, all easy to change: department managers keep their ability to manage their own departments' documents; new Login IDs are made from the name; the six departments are fixed in code (a read-only Departments page); the Super Admin keeps a page for asking the company documents.
 
@@ -73,4 +73,4 @@ See `docs/decisions/ADR-0001-initial-decisions.md`, section "Pending".
 - 2026-10-31: M11 (login, roles, permissions), M12 (hybrid search, reranking), M13 (RAGAS, offline), M10 (PostgreSQL support, unverified) and M14 (Docker, readiness check, security headers, unverified). All pushed to GitHub.
 - 2026-10-31: status file brought up to date (it still described the 2026-10-30 state with no code).
 - 2026-10-31: M13 run for real (first RAGAS baseline).
-- 2026-10-31: authentication and interface redesign, phases 1 to 8, pushed. Phase 9: authorization sweep and documents.
+- 2026-10-31: authentication and interface redesign, phases 1 to 8, pushed. Phase 9 (authorization sweep, documents) pushed too.
