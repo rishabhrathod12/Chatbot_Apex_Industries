@@ -1,5 +1,4 @@
-import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
@@ -14,20 +13,13 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-
-
-def _new_id() -> str:
-    return uuid.uuid4().hex
-
-
-def _now() -> datetime:
-    return datetime.now(UTC)
+from app.models._common import new_id, utcnow
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     email: Mapped[str] = mapped_column(String(254), unique=True)  # stored lower-case
     # What people type to sign in (the email works too). Lower-case, unique.
     login_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
@@ -43,7 +35,7 @@ class User(Base):
     created_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
     role: Mapped[str] = mapped_column(String(24))  # super_admin | department_manager | employee
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     departments: Mapped[list["UserDepartment"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -71,9 +63,9 @@ class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
     __table_args__ = (Index("ix_refresh_tokens_user", "user_id"),)
 
-    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -1,13 +1,10 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
-
-
-def _now() -> datetime:
-    return datetime.now(UTC)
+from app.models._common import utcnow
 
 
 class AuditLog(Base):
@@ -24,4 +21,4 @@ class AuditLog(Base):
     target_type: Mapped[str | None] = mapped_column(String(24), nullable=True)
     target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     detail: Mapped[str | None] = mapped_column(String(64), nullable=True)  # a short code
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -58,18 +58,6 @@ def needs_review(scored: list[ScoredSample]) -> dict[str, list[str]]:
     return flagged
 
 
-def by_group(scored: list[ScoredSample], key: str) -> dict[str, dict[str, float]]:
-    """Mean score per metric split by case 'type' or 'tag' (empty tag shown as 'original')."""
-    groups: dict[str, list[ScoredSample]] = {}
-    for s in scored:
-        name = s.sample.case_type if key == "type" else (s.sample.tag or "original")
-        groups.setdefault(name, []).append(s)
-    return {
-        name: {m: v["mean"] for m, v in summarize_scores(rows).items()}
-        for name, rows in groups.items()
-    }
-
-
 def format_report(
     scored: list[ScoredSample], skipped: list[SkippedCase], *, judge: str, embeddings: str
 ) -> str:

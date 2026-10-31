@@ -1,20 +1,12 @@
-import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import DateTime, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+from app.models._common import new_id, utcnow
 
 _NOT_DELETED = text("deleted_at IS NULL")
-
-
-def _new_id() -> str:
-    return uuid.uuid4().hex
-
-
-def _now() -> datetime:
-    return datetime.now(UTC)
 
 
 class Document(Base):
@@ -32,7 +24,7 @@ class Document(Base):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     scope: Mapped[str] = mapped_column(String(16))  # "personal" | "enterprise"
     owner_id: Mapped[str] = mapped_column(String(64))
     department: Mapped[str] = mapped_column(String(32), default="")  # "" for personal
@@ -66,5 +58,5 @@ class Document(Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # The earlier version this document replaces (company documents only).
     supersedes_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

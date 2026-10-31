@@ -47,8 +47,8 @@ class Chunk(BaseModel):
         return f"{heading}\n{self.text}"
 
     def to_metadata(self) -> dict[str, str | int]:
-        """Flat metadata for the vector store. Chroma rejects None, so absent values are omitted
-        (pages) or empty (strings)."""
+        """Flat metadata for the vector store: only plain strings and numbers, so absent values
+        are omitted (pages) or empty (strings)."""
         meta: dict[str, str | int] = {
             "chunk_id": self.chunk_id,
             "document_id": self.document_id,
