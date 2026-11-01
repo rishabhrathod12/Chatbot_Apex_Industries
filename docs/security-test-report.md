@@ -60,7 +60,7 @@ Three earlier-phase checks were repeated: archived documents readable by everyon
 
 - **The web pages in a real browser.** They were driven by Streamlit's test runner against a fake API; nobody has looked at them in a browser yet.
 - **Answer text in old conversations** is stored as the person saw it. Citations are blanked when access is lost; the text of the answer is not rewritten.
-- **PostgreSQL.** All of this ran on SQLite. The 4 Postgres tests are still skipped (no Postgres installed).
+- **PostgreSQL.** The sweep and the rest of this report were written and first run on SQLite. On 2026-11-01 the whole suite, including the 111-test sweep, was run again on PostgreSQL 18.6 with no security test failing (the one failure in that run was a data-copy test, unrelated to access control). The deliberate-break checks were not repeated on PostgreSQL.
 - **Several API processes.** The login limiter and the last-Super-Admin lock are in memory (one process).
 - **TLS, and a stolen but still valid access token** (valid for at most 30 minutes; refresh tokens can be revoked).
 - **Prompt injection inside a permitted document** is a model-behaviour risk, handled by the answering rules, not by access control.

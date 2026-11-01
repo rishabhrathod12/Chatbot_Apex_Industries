@@ -110,7 +110,7 @@ Everything is under `/api/v1`. A test fails if a route is added without being cl
 
 ## 7. Deployment shapes
 
-- **Development:** `scripts\dev.ps1` runs the API (port 8000) and the web page (port 8501) from `.venv`, with SQLite and the embedded vector store on disk. It refuses to start over an old copy still holding a port (`-Restart` replaces it).
+- **Development:** `scripts\dev.ps1` runs the API (port 8000) and the web page (port 8501) from `.venv`, with the embedded vector store on disk and the database chosen by `DATABASE_URL`: SQLite when it is absent, PostgreSQL (verified on a native 18.6 install) when it is set. It refuses to start over an old copy still holding a port (`-Restart` replaces it).
 - **Docker:** `docker-compose.yml` runs PostgreSQL, the API (one worker, because the embedded vector store allows one process) and the web page, ports on 127.0.0.1 only, secrets from `.env`, migrations applied at start. Health checks use `/health/ready`.
 - **RAGAS scoring** runs from a separate environment (`.venv-eval`) because ragas needs an older `openai` package.
 
@@ -149,6 +149,6 @@ Employees see: Dashboard, Upload PDF, My Documents, Chat with My Documents, Comp
 
 Decisions: `docs/decisions/ADR-0001-initial-decisions.md`.
 
-Current limits (also in `PROJECT_STATUS.md`): one API process (embedded vector store, in-memory login limiter and last-admin lock); no TLS or CI; keyword search scans permitted chunks in Python; no OCR; PostgreSQL and Docker are written but have not been run for real.
+Current limits (also in `PROJECT_STATUS.md`): one API process (embedded vector store, in-memory login limiter and last-admin lock); no TLS or CI; keyword search scans permitted chunks in Python; no OCR; Docker is written but has not been run for real. PostgreSQL was verified on 2026-11-01 (`postgres-setup.md`).
 
 Scaling path: Qdrant server or pgvector behind the `VectorStore` interface, a task queue for ingestion, several API workers with a shared limiter, S3-compatible file storage, SSO, caching of embeddings and answers, OCR for image pages.
