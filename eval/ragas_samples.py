@@ -97,6 +97,7 @@ def collect_samples(
     use_rerank: bool = True,
     rerank_top_n: int = 8,
     rerank_min_relevance: int = 2,
+    keyword_rescue: int = 0,
     workers: int = 1,
 ) -> tuple[list[RagasSample], list[SkippedCase]]:
     """Answer every case the way the app does and keep the ones that got an answer."""
@@ -114,6 +115,7 @@ def collect_samples(
             use_rerank=use_rerank,
             rerank_top_n=rerank_top_n,
             rerank_min_relevance=rerank_min_relevance,
+            keyword_rescue=keyword_rescue,
         )
         if reply.status != "answered" or not recorder.contexts:
             return SkippedCase(case.id, case.type, reply.reason or reply.status)

@@ -90,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
                 use_rerank=settings.rerank_enabled,
                 rerank_top_n=settings.rerank_top_n,
                 rerank_min_relevance=settings.rerank_min_relevance,
+                keyword_rescue=settings.retrieval_keyword_rescue,
                 workers=args.workers,
             )
         except LlmError as exc:

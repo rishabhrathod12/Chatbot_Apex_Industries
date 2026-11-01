@@ -14,7 +14,38 @@ Judge `gpt-4.1-mini`, embeddings `text-embedding-3-small`, the app's defaults (h
 
 By kind of question, faithfulness is 1.00 on the original answerable questions and falls to about 0.7 on paraphrased, held-out and near-miss ones. Retrieval looks strong (precision 0.98). The relevancy score is probably misleading: RAGAS generates questions from the answer and compares them with the real one, so bulleted procedure answers and answers that say "not specified" score low (a "not specified" answer scores 0).
 
-**Not yet done:** reading the 8 low-faithfulness answers (K03, P01, P02, N03, H04, J02, J06, J07), and H07, an answerable question that was refused. The per-question scores are in `eval/results/ragas.json` (git-ignored).
+The per-question scores are in `eval/results/ragas.json` (git-ignored).
+
+## Reading the 8 low-faithfulness answers and the refusal H07 (2026-11-01)
+
+Each answer was checked by hand against the text of the sample PDFs. Most of the low scores are the judge, not the product:
+
+| Case | Score | Verdict |
+|---|---|---|
+| J06 | 0.0 | Judge error: the answer repeats a document line word for word |
+| H04, J02 | 0.33, 0.5 | Judge too strict: every claim is in the documents |
+| P01 | 0.5 | Right answer; the judge dislikes a fair inference ("a door sensor is an interlock") |
+| K03, P02, J07 | 0.67, 0.33, 0.2 | Real but mild: the model adds a purpose or qualifier the text does not state, or joins two documents |
+| N03 | 0.71 | Real: "How do I apply for maternity leave?" is answered with the generic leave process written as if it were about maternity leave; the HR policy never mentions it |
+| H07 | refused | Real false refusal: the document says "do not improvise clamps or fixtures", but the line sits in a long chunk whose overall meaning scores below the 0.25 floor |
+
+So the 0.91 faithfulness understates the product; the real defect is one pattern: **the model adds small details, or applies a general rule to a specific case the documents do not mention.**
+
+## Changes tried on 2026-11-01 and what they measured
+
+Every run below is the 71-question golden set through the app's own settings (hybrid search, reranking, `gpt-4.1-mini`), about 127 to 130 model calls and 80,000 to 95,000 input tokens per run (a few cents). It is the answer and refusal behaviour, not a RAGAS re-score: **faithfulness has not been re-measured after these changes.** Answers vary slightly between identical runs (N01 flipped between answering and declining), so single differences are weak evidence.
+
+| Run | Answered | Answerable cases answered with the expected source | Unanswerable cases wrongly answered |
+|---|---|---|---|
+| Before | 55 / 71 | 53 / 54 | 0 / 8 |
+| A: two new prompt rules | 56 / 71 | 53 / 54 | 0 / 8 |
+| A + keyword rescue (B) | 59 / 71 | 54 / 54 | 1 / 8 |
+
+**A, the prompt (kept).** Rule 7: state only what an excerpt says, no added purposes or qualifiers. Rule 8: if a distinguishing word of the question never appears in the excerpts, say so first. It made one clear difference: "What PPE do I need for welding?" is now answered "The excerpts do not mention welding specifically", followed by the general PPE guidance, instead of a bare refusal. It did **not** fix N03: the model still writes "maternity leave" into the generic process. Prompt wording alone does not stop that.
+
+**B, the keyword rescue (built, off by default).** `RETRIEVAL_KEYWORD_RESCUE=N` lets the top N keyword matches skip the 0.25 similarity floor if reranking is on and the judge scores them 3 ("directly answers"). It fixes H07 ("Do not improvise clamps or fixtures; secure the workpiece using the approved workholding method only", cited to the right document). But it also made "What is the goods receipt procedure of the Stores department?" (unanswerable) answer with an unrelated Production SOP line, in all three runs (N = 1, 2 and 3), because the reranker itself scored that line 3. Without the rescue that question was refused in all four runs. A confident wrong answer is worse than a missed one for safety documents, so the default is 0. Enable it only if you accept that trade.
+
+**Still open:** N03's pattern (a general rule presented as specific); re-scoring faithfulness with RAGAS after change A; whole-document questions and OCR (not started, your decision).
 
 ## Original notes (written before the first run)
 

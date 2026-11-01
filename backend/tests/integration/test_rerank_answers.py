@@ -166,6 +166,79 @@ def test_hybrid_retrieval_runs_through_the_answering_step(indexed_samples: Index
     assert result.sources
 
 
+# ---------- the optional keyword rescue of the similarity floor ----------
+
+FLOOR = 0.99  # nothing reaches this by meaning, so only the rescue can reach the judge
+
+
+def rescue_ask(samples: IndexedSamples, chat: RoutedChat, **kw: object):  # noqa: ANN202
+    return ask(samples, chat, retrieval_mode="hybrid", min_score=FLOOR, **kw)
+
+
+def test_retrieval_reports_which_hits_keyword_search_ranked_highest(
+    indexed_samples: IndexedSamples,
+) -> None:
+    from app.rag.retrieval import retrieve_detailed
+
+    found = retrieve_detailed(
+        indexed_samples.embedder,
+        indexed_samples.store,
+        QUESTION,
+        top_k=5,
+        mode="hybrid",
+        keyword_ranks=2,
+    )
+    assert len(found.keyword_top) == 2
+    assert found.keyword_top <= {hit.chunk_id for hit in found.hits} | found.keyword_top
+    plain = retrieve_detailed(
+        indexed_samples.embedder, indexed_samples.store, QUESTION, top_k=5, mode="semantic"
+    )
+    assert plain.keyword_top == frozenset()
+
+
+def test_without_the_rescue_a_hybrid_search_still_stops_at_the_floor(
+    indexed_samples: IndexedSamples,
+) -> None:
+    chat = RoutedChat()
+    result = rescue_ask(indexed_samples, chat)  # rescue defaults to off
+    assert result.reason == "no_relevant_context"
+    assert chat.judged == [] and chat.answer_prompts == []
+
+
+def test_a_rescued_passage_must_be_judged_to_answer_directly(
+    indexed_samples: IndexedSamples,
+) -> None:
+    chat = RoutedChat()  # the judge scores everything 3
+    result = rescue_ask(indexed_samples, chat, keyword_rescue=2)
+    assert result.status == "answered"
+    assert len(chat.judged) == 1 and len(chat.judged[0]) == 2  # only the rescued ones were judged
+
+
+def test_a_rescued_passage_judged_only_partly_relevant_is_not_used(
+    indexed_samples: IndexedSamples,
+) -> None:
+    chat = RoutedChat(judge=lambda texts: {str(i + 1): 2 for i in range(len(texts))})
+    result = rescue_ask(indexed_samples, chat, keyword_rescue=2)
+    assert (result.status, result.reason) == ("not_found", "low_relevance")
+    assert chat.answer_prompts == []
+
+
+def test_a_rescued_passage_is_dropped_when_the_judge_cannot_be_used(
+    indexed_samples: IndexedSamples,
+) -> None:
+    chat = RoutedChat(fail_rerank=True)
+    result = rescue_ask(indexed_samples, chat, keyword_rescue=2)
+    assert result.reason == "no_relevant_context"
+    assert chat.answer_prompts == []
+
+
+def test_the_rescue_needs_reranking_to_be_on(indexed_samples: IndexedSamples) -> None:
+    chat = RoutedChat()
+    result = rescue_ask(indexed_samples, chat, keyword_rescue=2, use_rerank=False)
+    assert result.reason == "no_relevant_context"
+    assert chat.judged == [] and chat.answer_prompts == []
+
+
 # ---------- through the API ----------
 
 

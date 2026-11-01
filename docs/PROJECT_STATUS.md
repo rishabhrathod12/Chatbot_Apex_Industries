@@ -22,7 +22,7 @@
 | M10 | PostgreSQL support | **Done and verified on a real PostgreSQL 18.6 (native Windows install), 2026-11-01.** Scope: Postgres migration only. The 4 Postgres tests pass; the whole suite passes on PostgreSQL; the development data was copied across and checked cell by cell; the app runs on it. See `docs/postgres-setup.md` |
 | M11 | Authentication, RBAC, department permissions | Done, pushed. Security report: `docs/security-test-report.md` |
 | M12 | Hybrid search and reranking | Done, pushed. Measured against M7: `docs/retrieval-baseline.md` section 6 |
-| M13 | RAGAS evaluation | Done and run for real on 2026-10-31 (separate `.venv-eval`). First baseline: faithfulness 0.91, answer relevancy 0.68 (probably misleading), context precision 0.98. The 8 lowest-faithfulness answers and one false refusal (H07) have **not** been read yet. See `docs/ragas-evaluation.md` |
+| M13 | RAGAS evaluation | Done and run for real on 2026-10-31 (separate `.venv-eval`). First baseline: faithfulness 0.91, answer relevancy 0.68 (probably misleading), context precision 0.98. The 8 lowest-faithfulness answers and the false refusal H07 were read on 2026-11-01: mostly judge errors, plus one real pattern (the model adds small details). Two answer-quality changes were measured; see `docs/ragas-evaluation.md` |
 | M14 | Docker, deployment, monitoring, hardening | Dockerfile, compose, `/health/ready`, security headers written. **Docker never built or run** (not installed). Not done: TLS, CI, metrics, backups, more than one API worker. See `docs/deployment.md` |
 
 ## Authentication and interface redesign (9 phases)
@@ -66,6 +66,7 @@ See `docs/decisions/ADR-0001-initial-decisions.md`, section "Pending".
 - The demo accounts (`admin` with a lost password, `production.employee`, and similar) should be disabled or removed before real staff use the app.
 - Backup and restore of PostgreSQL, `storage/uploads/` and `vector_db/` exist and were tested on 2026-11-01 (`scripts/backup.py`, `docs/deployment.md`). Still missing: a schedule, and a copy kept on another disk or machine. A full recovery of the live database was not rehearsed; the restore into the scratch database was.
 - The new web pages were only tested with Streamlit's test runner: no real-browser check of layout, spacing, the pop-ups or the 3 to 4 second auto-refresh of document lists.
+- Answer quality limits that remain: a general rule can still be presented as if it covered a specific case the documents never mention (N03, maternity leave); whole-document questions ("summarise this document") and scanned or image pages (no OCR) still come back as not found. Both of the last two await a decision.
 - Old conversations: citations are blanked when access is lost, but the stored answer text is not rewritten.
 - No TLS in the Docker setup: do not expose it to other people without a reverse proxy.
 - One API process only: the embedded Qdrant store, the in-memory login limiter and the last-Super-Admin lock do not support several.
@@ -86,4 +87,5 @@ See `docs/decisions/ADR-0001-initial-decisions.md`, section "Pending".
 - 2026-10-31: repository cleanup on branch `cleanup/structure` (phases 0 to 2): dead code removed, shared model helpers, the 14 security test files moved to `backend/tests/security/`. Behaviour unchanged; same 1168 tests pass.
 - 2026-10-31: `docs/data-model.md` and `docs/architecture.md` rewritten to match the code and migration 0008 (they still described the original M0 design).
 - 2026-11-01: **M10 verified on PostgreSQL 18.6.** Migrations 0001 to 0008 run up, down and up again; the migrated schema matches the models; the whole suite passes on PostgreSQL; the development data (9 users, 8 documents, 10 conversations, 38 messages, 23 refresh tokens, 61 audit rows) was copied and compared cell by cell; the app was switched to PostgreSQL. Two mistakes in `test_postgres.py` were fixed (no application code changed).
+- 2026-11-01: answer quality. Two new answering rules (no added details; say when a word of the question is not in the documents) are on. A keyword rescue for the similarity floor (`RETRIEVAL_KEYWORD_RESCUE`) was built and measured: it fixes the false refusal H07 but lets one unanswerable question through with a wrong answer, so it is **off by default**. Faithfulness was not re-measured with RAGAS.
 - 2026-11-01: `scripts/backup.py` added (database, uploads and vector index into a dated folder; restore into a scratch database with row-count comparison; damaged files refused). Tested with a real backup of the live database.

@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     retrieval_candidates: int = 20  # candidates gathered per method before fusing
     lexical_max_chunks: int = 5000  # keyword search scans at most this many permitted chunks
     rerank_enabled: bool = True
+    # Off by default. When N > 0 (and reranking is on), the top N keyword matches skip the
+    # meaning-similarity floor and must then be judged to answer the question directly. Measured
+    # on the golden set: it rescues one wrongly refused question and lets one unanswerable
+    # question through with a wrong answer, so it stays off (docs/ragas-evaluation.md).
+    retrieval_keyword_rescue: int = 0
     rerank_top_n: int = 8  # candidates the reranking model is shown
     rerank_min_relevance: int = 2  # 0-3 scale; lower-scored candidates are dropped
     chat_history_turns: int = 3  # earlier question/answer pairs used to resolve follow-ups
@@ -134,6 +139,8 @@ class Settings(BaseSettings):
             raise ValueError("RERANK_TOP_N must be between 1 and 20")
         if not 0 <= self.rerank_min_relevance <= 3:
             raise ValueError("RERANK_MIN_RELEVANCE must be between 0 and 3")
+        if not 0 <= self.retrieval_keyword_rescue <= 10:
+            raise ValueError("RETRIEVAL_KEYWORD_RESCUE must be between 0 and 10")
         if self.lexical_max_chunks < 1:
             raise ValueError("LEXICAL_MAX_CHUNKS must be at least 1")
         if not 1 <= self.retrieval_top_k <= 20:

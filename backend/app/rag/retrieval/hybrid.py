@@ -1,5 +1,6 @@
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from typing import Literal
 
 from app.rag.ingestion.embedder import Embedder
@@ -29,6 +30,14 @@ def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
     return dot / norm if norm else 0.0
 
 
+@dataclass(frozen=True)
+class Retrieval:
+    """The best chunks for a question, and which of them keyword search ranked near the top."""
+
+    hits: list[SearchHit]
+    keyword_top: frozenset[str] = field(default_factory=frozenset)  # chunk ids, best first ranks
+
+
 def retrieve(
     embedder: Embedder,
     store: VectorStore,
@@ -40,6 +49,31 @@ def retrieve(
     candidates: int = 20,
     max_scan: int = 5000,
 ) -> list[SearchHit]:
+    """Find the best chunks for a question (see `retrieve_detailed`)."""
+    return retrieve_detailed(
+        embedder,
+        store,
+        query,
+        top_k=top_k,
+        search_filter=search_filter,
+        mode=mode,
+        candidates=candidates,
+        max_scan=max_scan,
+    ).hits
+
+
+def retrieve_detailed(
+    embedder: Embedder,
+    store: VectorStore,
+    query: str,
+    *,
+    top_k: int,
+    search_filter: SearchFilter | None = None,
+    mode: RetrievalMode = "semantic",
+    candidates: int = 20,
+    max_scan: int = 5000,
+    keyword_ranks: int = 3,
+) -> Retrieval:
     """Find the best chunks for a question.
 
     `semantic` is vector search only. `hybrid` also runs keyword search over the chunks the filter
@@ -47,7 +81,9 @@ def retrieve(
     carries its meaning-similarity score so the relevance gate works the same in both modes.
     """
     if mode == "semantic":
-        return semantic_search(embedder, store, query, top_k=top_k, search_filter=search_filter)
+        return Retrieval(
+            semantic_search(embedder, store, query, top_k=top_k, search_filter=search_filter)
+        )
 
     query_vector = embedder.embed([query])[0]
     semantic = store.query(query_vector, top_k=max(candidates, top_k), search_filter=search_filter)
@@ -68,4 +104,5 @@ def retrieve(
     order = reciprocal_rank_fusion(
         [[h.chunk_id for h in semantic], [h.chunk.chunk_id for h in lexical]]
     )
-    return [by_id[chunk_id] for chunk_id in order[:top_k]]
+    keyword_top = frozenset(h.chunk.chunk_id for h in lexical[:keyword_ranks])
+    return Retrieval([by_id[chunk_id] for chunk_id in order[:top_k]], keyword_top)

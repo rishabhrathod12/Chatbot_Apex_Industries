@@ -115,6 +115,7 @@ def evaluate_answers(
     use_rerank: bool = False,
     rerank_top_n: int = 8,
     rerank_min_relevance: int = 2,
+    keyword_rescue: int = 0,
     workers: int = 1,
 ) -> list[AnswerResult]:
     """Answer every case. With `workers` > 1 the questions run in parallel (results keep order)."""
@@ -131,6 +132,7 @@ def evaluate_answers(
             use_rerank=use_rerank,
             rerank_top_n=rerank_top_n,
             rerank_min_relevance=rerank_min_relevance,
+            keyword_rescue=keyword_rescue,
         )
         return AnswerResult(
             case_id=case.id,
