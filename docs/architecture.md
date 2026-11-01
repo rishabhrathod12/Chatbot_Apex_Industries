@@ -149,6 +149,6 @@ Employees see: Dashboard, Upload PDF, My Documents, Chat with My Documents, Comp
 
 Decisions: `docs/decisions/ADR-0001-initial-decisions.md`.
 
-Current limits (also in `PROJECT_STATUS.md`): one API process (embedded vector store, in-memory login limiter and last-admin lock); no TLS; CI is defined but has not run on GitHub yet; keyword search scans permitted chunks in Python; no OCR; Docker is written but has not been run for real. PostgreSQL was verified on 2026-11-01 (`postgres-setup.md`).
+Current limits (also in `PROJECT_STATUS.md`): one API process (embedded vector store, in-memory login limiter and last-admin lock); no TLS; CI runs on GitHub (first run green, 2026-11-01); keyword search scans permitted chunks in Python; no OCR; Docker is written but has not been run for real. PostgreSQL was verified on 2026-11-01 (`postgres-setup.md`).
 
 Scaling path: Qdrant server or pgvector behind the `VectorStore` interface, a task queue for ingestion, several API workers with a shared limiter, S3-compatible file storage, SSO, caching of embeddings and answers, OCR for image pages.

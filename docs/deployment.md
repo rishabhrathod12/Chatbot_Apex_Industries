@@ -91,4 +91,4 @@ published database port temporarily).
   For the Docker setup, the equivalent is `docker compose exec db pg_dump -U apex apex > apex.sql` plus a copy of
   the `uploads` and `vectors` volumes; that route has not been run.
 - **Updates:** `git pull` then `docker compose up -d --build`; migrations run on start. Take a backup first.
-- **CI** is defined in `.github/workflows/ci.yml` (ruff and mypy pinned to the versions the project uses, the full suite on SQLite, and the 4 PostgreSQL tests against a PostgreSQL 18 service). It had not run on GitHub when this was written, so expect a first-run fix or two, especially for anything that behaves differently on Linux. It does not run the live OpenAI tests, the whole suite on PostgreSQL, or a secret scan.
+- **CI** is defined in `.github/workflows/ci.yml` (ruff and mypy pinned to the versions the project uses, the full suite on SQLite, and the 4 PostgreSQL tests against a PostgreSQL 18 service). Its first run on GitHub (2026-11-01, commit `b451e97`) passed all three jobs on Linux. It does not run the live OpenAI tests, the whole suite on PostgreSQL, or a secret scan.
