@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     # on the golden set: it rescues one wrongly refused question and lets one unanswerable
     # question through with a wrong answer, so it stays off (docs/ragas-evaluation.md).
     retrieval_keyword_rescue: int = 0
+    # Requests about a whole document ("summarise this", "key points of the manual") are answered
+    # from excerpts spread across the document(s) instead of the best-matching passages.
+    overview_enabled: bool = True
+    overview_max_documents: int = 6  # documents covered by one overview
+    overview_max_chars: int = 36000  # excerpt text sent to the model for one overview
+    overview_max_answer_tokens: int = 3000  # reply length limit for an overview (answers use 600)
     rerank_top_n: int = 8  # candidates the reranking model is shown
     rerank_min_relevance: int = 2  # 0-3 scale; lower-scored candidates are dropped
     chat_history_turns: int = 3  # earlier question/answer pairs used to resolve follow-ups
@@ -139,6 +145,12 @@ class Settings(BaseSettings):
             raise ValueError("RERANK_TOP_N must be between 1 and 20")
         if not 0 <= self.rerank_min_relevance <= 3:
             raise ValueError("RERANK_MIN_RELEVANCE must be between 0 and 3")
+        if not 1 <= self.overview_max_documents <= 20:
+            raise ValueError("OVERVIEW_MAX_DOCUMENTS must be between 1 and 20")
+        if not 200 <= self.overview_max_answer_tokens <= 8000:
+            raise ValueError("OVERVIEW_MAX_ANSWER_TOKENS must be between 200 and 8000")
+        if not 4000 <= self.overview_max_chars <= 200000:
+            raise ValueError("OVERVIEW_MAX_CHARS must be between 4000 and 200000")
         if not 0 <= self.retrieval_keyword_rescue <= 10:
             raise ValueError("RETRIEVAL_KEYWORD_RESCUE must be between 0 and 10")
         if self.lexical_max_chunks < 1:

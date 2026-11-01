@@ -1,19 +1,17 @@
 import logging
-import re
 import time
 
-from app.rag.generation.citations import select_quote
+from app.rag.generation.grounding import check_citations, source_from_hit
 from app.rag.generation.llm import ChatModel
+from app.rag.generation.overview import answer_overview, is_overview_question
 from app.rag.generation.prompts import NOT_FOUND_MESSAGE, NOT_FOUND_TOKEN, build_messages
 from app.rag.generation.rerank import rerank
 from app.rag.ingestion.embedder import Embedder
 from app.rag.retrieval import RetrievalMode, retrieve_detailed
 from app.rag.vectorstore import SearchFilter, SearchHit, VectorStore
-from app.schemas.chat import ChatAnswer, Source
+from app.schemas.chat import ChatAnswer
 
 logger = logging.getLogger("app.rag")
-
-_MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 
 # The relevance check's top score ("directly answers"), required of a passage that is below the
 # similarity floor and was let through only because keyword search ranked it highly.
@@ -22,41 +20,6 @@ RESCUE_MIN_RELEVANCE = 3
 
 def _not_found(reason: str) -> ChatAnswer:
     return ChatAnswer(status="not_found", answer=NOT_FOUND_MESSAGE, sources=[], reason=reason)
-
-
-def _check_citations(text: str, available: int) -> tuple[str, list[int]]:
-    """Keep only markers that point at an excerpt we really sent. Returns cleaned text and the
-    excerpt numbers used, in order of first appearance."""
-    used: list[int] = []
-
-    def keep_valid(match: re.Match[str]) -> str:
-        numbers = [int(n) for n in re.findall(r"\d+", match.group(1))]
-        valid = [n for n in numbers if 1 <= n <= available]
-        for n in valid:
-            if n not in used:
-                used.append(n)
-        return f"[{', '.join(str(n) for n in valid)}]" if valid else ""
-
-    cleaned = _MARKER.sub(keep_valid, text)
-    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
-    cleaned = re.sub(r"[ \t]+([.,;:!?])", r"\1", cleaned)
-    return cleaned.strip(), used
-
-
-def _source(number: int, hit: SearchHit, answer: str) -> Source:
-    meta = hit.metadata
-    start, end = meta.get("page_start"), meta.get("page_end")
-    return Source(
-        number=number,
-        chunk_id=hit.chunk_id,
-        doc_code=str(meta.get("doc_code", "")),
-        doc_title=str(meta.get("doc_title", "")),
-        source_name=str(meta.get("source_name", "")),
-        section_title=str(meta.get("section_title", "")),
-        page_start=start if isinstance(start, int) else None,
-        page_end=end if isinstance(end, int) else None,
-        quote=select_quote(answer, number, hit.text),
-    )
 
 
 def answer_question(
@@ -75,6 +38,10 @@ def answer_question(
     rerank_top_n: int = 8,
     rerank_min_relevance: int = 2,
     keyword_rescue: int = 0,
+    overview: bool = False,
+    overview_max_documents: int = 6,
+    overview_max_chars: int = 36000,
+    overview_max_answer_tokens: int = 3000,
 ) -> ChatAnswer:
     """Retrieve, optionally re-check relevance, ask the model, and check the answer.
 
@@ -83,6 +50,19 @@ def answer_question(
     is on) that a relevance check kept. If nothing qualifies the answering model is not
     called at all. An answer is only returned when it cites at least one excerpt that was provided.
     """
+    if overview and is_overview_question(question):
+        # A request about a whole document has no best-matching passages, so it is answered from
+        # excerpts spread across the document(s), through the same permission filter.
+        return answer_overview(
+            question,
+            store=store,
+            chat_model=chat_model,
+            search_filter=search_filter,
+            max_documents=overview_max_documents,
+            max_chars=overview_max_chars,
+            max_answer_tokens=overview_max_answer_tokens,
+            max_scan=max_scan,
+        )
     started = time.perf_counter()
     wanted = max(top_k, rerank_top_n) if use_rerank else top_k
     found = retrieve_detailed(
@@ -152,12 +132,12 @@ def _generate(question: str, relevant: list[SearchHit], chat_model: ChatModel) -
     if raw.upper().startswith(NOT_FOUND_TOKEN):
         return _not_found("model_declined")
 
-    text, used = _check_citations(raw, len(relevant))
+    text, used = check_citations(raw, len(relevant))
     if not used:
         # An answer that points at none of the provided excerpts can't be checked, so drop it.
         return _not_found("uncited_answer")
     return ChatAnswer(
         status="answered",
         answer=text,
-        sources=[_source(number, relevant[number - 1], text) for number in used],
+        sources=[source_from_hit(number, relevant[number - 1], text) for number in used],
     )

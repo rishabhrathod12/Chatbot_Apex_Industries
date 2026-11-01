@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Sequence
-from typing import Any, Literal, Protocol, TypedDict
+from typing import Any, Literal, Protocol, TypedDict, runtime_checkable
 
 import openai
 
@@ -26,6 +26,13 @@ class ChatModel(Protocol):
     def complete(self, messages: Sequence[ChatMessage]) -> str: ...
 
 
+@runtime_checkable
+class ResizableChatModel(ChatModel, Protocol):
+    """A chat model that can give a copy of itself a different reply length limit."""
+
+    def with_max_tokens(self, max_tokens: int) -> ChatModel: ...
+
+
 class OpenAIChatModel:
     def __init__(
         self,
@@ -40,6 +47,13 @@ class OpenAIChatModel:
         self._max_tokens = max_tokens
         # The SDK retries rate limits, 5xx and connection errors with backoff.
         self._client = client or openai.OpenAI(api_key=api_key, max_retries=3, timeout=60.0)
+        self._api_key = api_key
+
+    def with_max_tokens(self, max_tokens: int) -> "OpenAIChatModel":
+        """The same model and client with another reply length limit (for long answers)."""
+        return OpenAIChatModel(
+            self._api_key, self._model, self._temperature, max_tokens, client=self._client
+        )
 
     def complete(self, messages: Sequence[ChatMessage]) -> str:
         kwargs: dict[str, Any] = {
@@ -57,6 +71,10 @@ class OpenAIChatModel:
             raise LlmError("llm_request_failed") from exc
         if not response.choices:
             raise LlmError("llm_empty_response")
+        if getattr(response.choices[0], "finish_reason", None) == "length":
+            logger.warning(
+                "chat reply cut off at the length limit", extra={"max_tokens": self._max_tokens}
+            )
         return str(response.choices[0].message.content or "")
 
 

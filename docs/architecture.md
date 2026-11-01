@@ -92,9 +92,30 @@ Question + bearer token
  -> the question and answer are saved to the person's conversation; logs hold ids and timings only
 ```
 
+### 5a. Overview requests ("summary of documents", "key points of document")
+
+```
+Question -> recognised by plain pattern rules (no model call) as a request about a whole document
+ -> the permitted chunks come from store.scan(filter): the same permission-filtered view keyword search uses
+ -> which documents: the one the question names (by document code, or because every topic word of the question is in
+    its title); otherwise every document the person may read, up to 6, in title order
+ -> excerpts spread across each document in reading order (always starting with its first chunk), within a
+    character budget (36,000 in all, at least 4,000 per document)
+ -> ONE model call with its own prompt (3 bullets per document, every bullet cites its excerpt) and a larger reply
+    limit (3,000 tokens; normal answers use 600)
+ -> the same citation checks as a normal answer; sources come from stored chunk data
+ -> notes added by the system, not the model: "Showing 6 of N documents" and "(Based on excerpts taken from across
+    each document, not every page.)"
+```
+
+A question about content ("key points to check before operating a CNC machine", "what does the safety manual say
+about gloves?") names no document and is answered the normal way. It can be switched off with `OVERVIEW_ENABLED=false`.
+Limits: a document whose text cannot be read (a scan, a garbled font) cannot be summarised, and the model is told to
+say so; more than 6 documents are cut with a clear note, so name one to focus on it.
+
 Refusal reasons: `no_relevant_context`, `low_relevance`, `model_declined`, `uncited_answer`, `empty_answer`. Consequences worth knowing:
 
-- The system answers **specific questions** well. Requests about a whole document ("summarise this document", "what is my name?") often come back as not found, because no single passage answers them and the second gate throws related-but-not-answering passages away.
+- The system answers **specific questions** well. A request about a whole document ("summarise this", "key points of the manual", "what is this document about?") has no best-matching passage, so it takes a separate route (section 5a) instead of coming back as not found. A question that merely needs a fact from the whole text ("what is my name?") still depends on a passage stating it.
 - Text that is not in the PDF's text layer (pictures, scanned pages, garbled font encodings) cannot be found. There is no OCR.
 
 ## 6. API surface

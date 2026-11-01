@@ -249,6 +249,12 @@ def test_passage_text_cannot_break_out_of_its_block() -> None:
         ("lexical_max_chunks", 0, "LEXICAL_MAX_CHUNKS"),
         ("retrieval_keyword_rescue", -1, "RETRIEVAL_KEYWORD_RESCUE"),
         ("retrieval_keyword_rescue", 11, "RETRIEVAL_KEYWORD_RESCUE"),
+        ("overview_max_documents", 0, "OVERVIEW_MAX_DOCUMENTS"),
+        ("overview_max_documents", 21, "OVERVIEW_MAX_DOCUMENTS"),
+        ("overview_max_answer_tokens", 199, "OVERVIEW_MAX_ANSWER_TOKENS"),
+        ("overview_max_answer_tokens", 8001, "OVERVIEW_MAX_ANSWER_TOKENS"),
+        ("overview_max_chars", 3999, "OVERVIEW_MAX_CHARS"),
+        ("overview_max_chars", 200001, "OVERVIEW_MAX_CHARS"),
     ],
 )
 def test_retrieval_settings_are_validated(field: str, value: int, message: str) -> None:
@@ -259,6 +265,8 @@ def test_retrieval_settings_are_validated(field: str, value: int, message: str) 
 def test_the_defaults_are_the_measured_best_setting() -> None:
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert (s.retrieval_mode, s.rerank_enabled, s.retrieval_min_score) == ("hybrid", True, 0.25)
-    assert (
-        s.retrieval_keyword_rescue == 0
-    )  # measured: it trades one wrong refusal for a wrong answer
+    # measured: the keyword rescue trades one wrong refusal for a wrong answer, so it is off
+    assert s.retrieval_keyword_rescue == 0
+    assert s.overview_enabled is True
+    assert (s.overview_max_documents, s.overview_max_chars) == (6, 36000)
+    assert s.overview_max_answer_tokens == 3000

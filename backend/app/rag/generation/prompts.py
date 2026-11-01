@@ -39,7 +39,7 @@ def defang(text: str) -> str:
     return _TAG.sub("[context]", text)
 
 
-def _label(hit: SearchHit) -> str:
+def excerpt_label(hit: SearchHit) -> str:
     meta = hit.metadata
     title = str(meta.get("doc_title") or meta.get("source_name") or "document")
     code = str(meta.get("doc_code") or "")
@@ -54,7 +54,7 @@ def _label(hit: SearchHit) -> str:
 
 def build_messages(question: str, hits: Sequence[SearchHit]) -> list[ChatMessage]:
     excerpts = "\n\n".join(
-        f"[{number}] {defang(_label(hit))}\n{defang(hit.text)}"
+        f"[{number}] {defang(excerpt_label(hit))}\n{defang(hit.text)}"
         for number, hit in enumerate(hits, start=1)
     )
     user = f"<context>\n{excerpts}\n</context>\n\nQuestion: {defang(question.strip())}"

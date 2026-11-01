@@ -45,7 +45,7 @@ Every run below is the 71-question golden set through the app's own settings (hy
 
 **B, the keyword rescue (built, off by default).** `RETRIEVAL_KEYWORD_RESCUE=N` lets the top N keyword matches skip the 0.25 similarity floor if reranking is on and the judge scores them 3 ("directly answers"). It fixes H07 ("Do not improvise clamps or fixtures; secure the workpiece using the approved workholding method only", cited to the right document). But it also made "What is the goods receipt procedure of the Stores department?" (unanswerable) answer with an unrelated Production SOP line, in all three runs (N = 1, 2 and 3), because the reranker itself scored that line 3. Without the rescue that question was refused in all four runs. A confident wrong answer is worse than a missed one for safety documents, so the default is 0. Enable it only if you accept that trade.
 
-**Still open:** N03's pattern (a general rule presented as specific); re-scoring faithfulness with RAGAS after change A; whole-document questions and OCR (not started, your decision).
+**Still open:** N03's pattern (a general rule presented as specific); re-scoring faithfulness with RAGAS after change A; OCR (not started, awaits a decision). Whole-document requests were built afterwards (`docs/architecture.md` section 5a); they are not part of the golden set, so the figures above do not cover them.
 
 ## Original notes (written before the first run)
 
