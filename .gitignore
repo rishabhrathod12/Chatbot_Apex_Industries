@@ -10,6 +10,7 @@ apex/
 # Runtime data
 storage/
 vector_db/
+backups/
 *.sqlite3
 *.db
 

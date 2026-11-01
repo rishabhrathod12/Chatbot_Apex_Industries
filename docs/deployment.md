@@ -57,6 +57,25 @@ published database port temporarily).
 - API responses send `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Cache-Control: no-store`
   and a deny-everything Content-Security-Policy.
 
+## Backup and restore (native install, tested 2026-11-01)
+
+`scripts\backup.py` (run from the project folder with `.venv\Scripts\python.exe`):
+
+- `backup` writes `backups\apex-<date>-<time>\` with the database (`database.dump`, or `database.sqlite` for SQLite),
+  `uploads.zip`, `vector_db.zip` and a `manifest.json` (row count per table, migration version, checksums). It deletes
+  nothing unless you pass `--keep N`. The database password comes from `.env` through the environment and is never
+  printed.
+- `restore --backup <folder> --into-db apex_test` restores the database into a different database on the same server and
+  compares every table's row count with the manifest. A damaged file (checksum mismatch) is refused before anything
+  is restored, and restoring over the live database needs `--replace-live`. `--files-to <folder>` also unpacks the
+  uploads and vector index.
+- Tested: a real backup of the live database restored into the scratch database with every table matching, and
+  deliberately corrupted files were refused. The vector index is copied as files and may be inconsistent if the API is
+  busy; it can be rebuilt from the uploads.
+- To recover the live database after a disaster, restore with `--replace-live` into an empty `apex` database, then
+  copy the uploads and vector index back. That full recovery has not been rehearsed; the restore into the scratch
+  database has.
+
 ## Before letting other people use it (not done)
 
 - **TLS.** Nothing here encrypts traffic. Put a reverse proxy (Caddy or nginx) in front for HTTPS and publish only
@@ -66,7 +85,10 @@ published database port temporarily).
   separate changes.
 - **Login rate limiting sees the web container's address**, not the user's, because Streamlit calls the API from
   the server. It still limits per email, but not per client machine.
-- **Backups and restore** are not automated or tested. At minimum: `docker compose exec db pg_dump -U apex apex > apex.sql`
-  plus a copy of the `uploads` and `vectors` volumes.
+- **Backups are not automated, and nothing copies them off this machine.** The manual procedure is tested (below).
+  A backup on the same disk as the data does not survive a disk failure: copy `backups\` to another drive or machine
+  on a schedule (for example a Windows Task Scheduler job running `scripts\backup.py backup`).
+  For the Docker setup, the equivalent is `docker compose exec db pg_dump -U apex apex > apex.sql` plus a copy of
+  the `uploads` and `vectors` volumes; that route has not been run.
 - **Updates:** `git pull` then `docker compose up -d --build`; migrations run on start. Take a backup first.
 - No CI pipeline yet.

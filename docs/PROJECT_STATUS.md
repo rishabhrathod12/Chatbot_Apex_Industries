@@ -3,7 +3,7 @@
 **Project:** Manufacturing AI Knowledge Assistant, Apex Precision Manufacturing Pvt. Ltd.
 **Last updated:** 2026-11-01
 **Current state:** every milestone M0 to M14 has code, and so does the 9-phase authentication and interface redesign (below). All of it is on GitHub (`origin/main`). **The app now runs on PostgreSQL 18.6** (M10 verified on 2026-11-01). One milestone has still never run for real (M14 Docker), and **nobody has looked at the new web pages in a browser yet**.
-**Ready to deploy?** Not yet. It is ready for a supervised pilot on one machine on a trusted network. Still open before other people use it: TLS, a stronger database password, a tested backup and restore, a real-browser walkthrough, and removing the demo accounts (see "Known issues and gaps").
+**Ready to deploy?** Not yet. It is ready for a supervised pilot on one machine on a trusted network. Still open before other people use it: TLS, a stronger database password, scheduled off-machine backups (the backup and restore script itself is tested), a real-browser walkthrough, and removing the demo accounts (see "Known issues and gaps").
 
 ## Milestone tracker
 
@@ -64,13 +64,13 @@ See `docs/decisions/ADR-0001-initial-decisions.md`, section "Pending".
 - PostgreSQL returns times in the server's time zone (India time on this machine), not UTC. Nothing in the application broke, but anything new that strips the time zone will show the wrong hour.
 - The `apex` database password is short. Choose a strong one before the database holds real data (`ALTER ROLE apex PASSWORD '...'`, then update `.env`).
 - The demo accounts (`admin` with a lost password, `production.employee`, and similar) should be disabled or removed before real staff use the app.
-- No tested backup or restore for PostgreSQL, `storage/uploads/` or `vector_db/`.
+- Backup and restore of PostgreSQL, `storage/uploads/` and `vector_db/` exist and were tested on 2026-11-01 (`scripts/backup.py`, `docs/deployment.md`). Still missing: a schedule, and a copy kept on another disk or machine. A full recovery of the live database was not rehearsed; the restore into the scratch database was.
 - The new web pages were only tested with Streamlit's test runner: no real-browser check of layout, spacing, the pop-ups or the 3 to 4 second auto-refresh of document lists.
 - Old conversations: citations are blanked when access is lost, but the stored answer text is not rewritten.
 - No TLS in the Docker setup: do not expose it to other people without a reverse proxy.
 - One API process only: the embedded Qdrant store, the in-memory login limiter and the last-Super-Admin lock do not support several.
 - Login rate limiting sees the web container's address when run in Docker, so it limits per email only.
-- No CI pipeline, metrics or alerting, and no automated or tested backups.
+- No CI pipeline, metrics or alerting, and no automated or off-machine backups.
 - Keyword search scans chunks in Python (fine for thousands of chunks, not millions); see `docs/retrieval-baseline.md`.
 - Document details (title, version, type) cannot be edited after upload; upload a new version instead.
 - `frontend/package-lock.json` is untracked and looks like a stray file.
@@ -86,3 +86,4 @@ See `docs/decisions/ADR-0001-initial-decisions.md`, section "Pending".
 - 2026-10-31: repository cleanup on branch `cleanup/structure` (phases 0 to 2): dead code removed, shared model helpers, the 14 security test files moved to `backend/tests/security/`. Behaviour unchanged; same 1168 tests pass.
 - 2026-10-31: `docs/data-model.md` and `docs/architecture.md` rewritten to match the code and migration 0008 (they still described the original M0 design).
 - 2026-11-01: **M10 verified on PostgreSQL 18.6.** Migrations 0001 to 0008 run up, down and up again; the migrated schema matches the models; the whole suite passes on PostgreSQL; the development data (9 users, 8 documents, 10 conversations, 38 messages, 23 refresh tokens, 61 audit rows) was copied and compared cell by cell; the app was switched to PostgreSQL. Two mistakes in `test_postgres.py` were fixed (no application code changed).
+- 2026-11-01: `scripts/backup.py` added (database, uploads and vector index into a dated folder; restore into a scratch database with row-count comparison; damaged files refused). Tested with a real backup of the live database.
