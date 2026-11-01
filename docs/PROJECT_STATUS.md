@@ -23,7 +23,7 @@
 | M11 | Authentication, RBAC, department permissions | Done, pushed. Security report: `docs/security-test-report.md` |
 | M12 | Hybrid search and reranking | Done, pushed. Measured against M7: `docs/retrieval-baseline.md` section 6 |
 | M13 | RAGAS evaluation | Done and run for real on 2026-10-31 (separate `.venv-eval`). First baseline: faithfulness 0.91, answer relevancy 0.68 (probably misleading), context precision 0.98. The 8 lowest-faithfulness answers and the false refusal H07 were read on 2026-11-01: mostly judge errors, plus one real pattern (the model adds small details). Two answer-quality changes were measured; see `docs/ragas-evaluation.md` |
-| M14 | Docker, deployment, monitoring, hardening | Dockerfile, compose, `/health/ready`, security headers written. **Docker never built or run** (not installed). Not done: TLS, CI, metrics, backups, more than one API worker. See `docs/deployment.md` |
+| M14 | Docker, deployment, monitoring, hardening | Dockerfile, compose, `/health/ready`, security headers written. **Docker never built or run** (not installed). CI is defined but has not run on GitHub yet. Not done: TLS, metrics, scheduled backups, more than one API worker. See `docs/deployment.md` |
 
 ## Authentication and interface redesign (9 phases)
 
@@ -71,7 +71,7 @@ See `docs/decisions/ADR-0001-initial-decisions.md`, section "Pending".
 - No TLS in the Docker setup: do not expose it to other people without a reverse proxy.
 - One API process only: the embedded Qdrant store, the in-memory login limiter and the last-Super-Admin lock do not support several.
 - Login rate limiting sees the web container's address when run in Docker, so it limits per email only.
-- No CI pipeline, metrics or alerting, and no automated or off-machine backups.
+- CI exists (`.github/workflows/ci.yml`: lint and type check, the full suite on SQLite, the 4 PostgreSQL tests against a PostgreSQL 18 container) but **has not run on GitHub yet**; it was only checked locally (the YAML parses, its commands pass here, and a clean clone of the repository collects and passes a representative slice). Linux behaviour is untested. No metrics or alerting, and no automated or off-machine backups.
 - Keyword search scans chunks in Python (fine for thousands of chunks, not millions); see `docs/retrieval-baseline.md`.
 - Document details (title, version, type) cannot be edited after upload; upload a new version instead.
 - `frontend/package-lock.json` is untracked and looks like a stray file.
@@ -88,4 +88,5 @@ See `docs/decisions/ADR-0001-initial-decisions.md`, section "Pending".
 - 2026-10-31: `docs/data-model.md` and `docs/architecture.md` rewritten to match the code and migration 0008 (they still described the original M0 design).
 - 2026-11-01: **M10 verified on PostgreSQL 18.6.** Migrations 0001 to 0008 run up, down and up again; the migrated schema matches the models; the whole suite passes on PostgreSQL; the development data (9 users, 8 documents, 10 conversations, 38 messages, 23 refresh tokens, 61 audit rows) was copied and compared cell by cell; the app was switched to PostgreSQL. Two mistakes in `test_postgres.py` were fixed (no application code changed).
 - 2026-11-01: answer quality. Two new answering rules (no added details; say when a word of the question is not in the documents) are on. A keyword rescue for the similarity floor (`RETRIEVAL_KEYWORD_RESCUE`) was built and measured: it fixes the false refusal H07 but lets one unanswerable question through with a wrong answer, so it is **off by default**. Faithfulness was not re-measured with RAGAS.
+- 2026-11-01: CI added (`.github/workflows/ci.yml`): lint and strict types with ruff and mypy pinned to the project's versions, the full suite on SQLite, and the 4 PostgreSQL tests against a PostgreSQL 18 service (the job fails if they are skipped). Not yet run on GitHub.
 - 2026-11-01: `scripts/backup.py` added (database, uploads and vector index into a dated folder; restore into a scratch database with row-count comparison; damaged files refused). Tested with a real backup of the live database.

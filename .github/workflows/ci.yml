@@ -1,0 +1,106 @@
+name: CI
+
+# Runs on every push to main and on every pull request. Nothing here needs a secret: the normal
+# suite is offline (a hashing embedder and fake chat models), and the live OpenAI tests are excluded
+# by pytest's own default (-m 'not live').
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  # ruff and mypy are not pinned in pyproject.toml. Pin them here to the versions the project is
+  # developed with, so a new release cannot turn CI red by itself. Bump them on purpose.
+  RUFF_VERSION: "0.17.3"
+  MYPY_VERSION: "2.4.1"
+
+jobs:
+  lint-and-types:
+    name: Lint and type check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          python -m pip install "ruff==${RUFF_VERSION}" "mypy==${MYPY_VERSION}"
+      - name: Ruff (lint)
+        run: ruff check .
+      - name: Ruff (format)
+        run: ruff format --check .
+      - name: Mypy (strict, as configured in pyproject.toml)
+        run: mypy
+
+  tests:
+    name: Tests (SQLite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Run the test suite
+        run: python -m pytest -q --tb=short
+
+  postgres:
+    name: Tests (PostgreSQL 18)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: apex_ci
+          POSTGRES_PASSWORD: apex_ci_password  # a throwaway database that exists only for this job
+          POSTGRES_DB: apex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U apex_ci -d apex_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql://apex_ci:apex_ci_password@localhost:5432/apex_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      # Migrations 0001-0008 up/down/up, schema matches the models, the partial unique index, and
+      # the SQLite-to-PostgreSQL copy. The whole suite on PostgreSQL (about 7 minutes) is run by
+      # hand with TEST_DATABASE_URL (docs/postgres-setup.md).
+      - name: Run the PostgreSQL tests
+        run: |
+          python -m pytest backend/tests/integration/test_postgres.py -q --tb=short -rs | tee pytest.out
+          # These tests skip themselves when TEST_POSTGRES_URL is missing, which would look green.
+          grep -Eq "^4 passed" pytest.out
