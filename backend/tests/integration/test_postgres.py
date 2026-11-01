@@ -10,6 +10,7 @@ database itself can be any empty or scratch one. Never point this at data you wa
 import os
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -35,9 +36,13 @@ pytestmark = pytest.mark.skipif(not BASE_URL, reason="TEST_POSTGRES_URL is not s
 
 
 def _in_schema(url: str, schema: str) -> URL:
-    return make_url(normalize_database_url(url)).update_query_pair(
-        "options", f"-csearch_path={schema}"
+    return make_url(normalize_database_url(url)).update_query_pairs(
+        [("options", f"-csearch_path={schema}")]
     )
+
+
+def _as_utc(value: datetime) -> datetime:
+    return (value.astimezone(UTC) if value.tzinfo else value).replace(tzinfo=None)
 
 
 @pytest.fixture
@@ -113,7 +118,9 @@ def test_copy_from_sqlite_keeps_data_times_and_id_counters(
         # timestamptz comes back aware, and equal to what SQLite held (which was UTC)
         mine = session.scalars(select(User).where(User.email == "admin@apex.test")).one()
         assert users[0].created_at.utcoffset() is not None
-        assert users[0].created_at.replace(tzinfo=None) == mine.created_at.replace(tzinfo=None)
+        # PostgreSQL returns the time in the session's zone and SQLite returns it naive (UTC):
+        # compare the instant, in UTC
+        assert _as_utc(users[0].created_at) == _as_utc(mine.created_at)
         # the integer id counter must continue after the copied rows instead of restarting at 1
         highest = db.execute(select(func.max(AuditLog.id))).scalar_one()
         db.add(AuditLog(action="probe", outcome="ok"))
