@@ -72,7 +72,7 @@ published database port temporarily).
 - Tested: a real backup of the live database restored into the scratch database with every table matching, and
   deliberately corrupted files were refused. The vector index is copied as files and may be inconsistent if the API is
   busy; it can be rebuilt from the uploads.
-- **Nightly job (written and tested, not registered).** `scripts\backup_job.ps1 -Destination "F:\ApexBackups;..."` takes a
+- **Nightly job (written and tested; registered, but not confirmed to start on schedule: see the next bullets).** `scripts\backup_job.ps1 -Destination "F:\ApexBackups;..."` takes a
   backup, copies it to each destination (folders separated by semicolons), checks every copied file against the
   checksums in `manifest.json`, and appends a line to `backups\backup.log` (times and results, never passwords). It
   exits with 1 if anything failed. It deletes nothing unless you pass `-Keep N`. `scripts\register_backup_task.ps1
@@ -89,8 +89,16 @@ published database port temporarily).
   folder.
 - Tested 2026-11-01 with the API running: a normal run, one good plus one unreachable destination (exit 1, the good
   copy still made), a tampered copy (one flipped byte, and a deleted file, both caught), and a restore of the
-  resulting backup into the scratch database (every table matched). The scheduled task itself has not been registered
-  or run.
+  resulting backup into the scratch database (every table matched). The scheduled task itself did not start properly (below).
+- **Task Scheduler problem on the development machine (2026-11-01).** Task `ApexBackup` (daily 02:00, destination
+  `F:\ApexBackups`, keep everything) is registered, but when started the process was created and then stayed
+  suspended (one thread, no handles, 0 CPU) for minutes and wrote nothing to the log; stopped and started again, it did
+  the same. Two trivial throwaway tasks (one running `cmd.exe`, one `powershell.exe`) stayed in the "Queued" state and
+  never ran, and raising their priority did not help, so the cause is not in these scripts. Running
+  `backup_job.ps1` directly works: a verified copy was made on F: the same day. Avast Antivirus and its Reason
+  Cybersecurity component are installed and are the suspect (they can hold back background-started programs); this
+  was not confirmed and no antivirus setting was changed. **Until this is understood, do not rely on the nightly run:
+  after 02:00, `backups\backup.log` must have a new line, and if it does not, run the job by hand.**
 - To recover the live database after a disaster, restore with `--replace-live` into an empty `apex` database, then
   copy the uploads and vector index back. That full recovery has not been rehearsed; the restore into the scratch
   database has.
