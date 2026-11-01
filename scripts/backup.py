@@ -42,7 +42,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from sqlalchemy import inspect, text  # noqa: E402
 from sqlalchemy.engine import URL, make_url  # noqa: E402
 
-from app.core.config import get_settings  # noqa: E402
+from app.core.config import Settings, get_settings  # noqa: E402
 from app.core.database import get_engine  # noqa: E402
 
 
@@ -86,16 +86,38 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _zip_folder(folder: Path, target: Path) -> int:
-    """Zip a folder (an empty zip if it does not exist). Returns the number of files."""
+def _zip_folder(
+    folder: Path,
+    target: Path,
+    *,
+    skip_names: tuple[str, ...] = (),
+    tolerate_locked: bool = False,
+) -> tuple[int, list[str]]:
+    """Zip a folder (an empty zip if it does not exist).
+
+    Returns the number of files zipped and the files left out because another program holds
+    them open. `skip_names` are left out on purpose (not reported). A locked file stops the
+    backup unless `tolerate_locked` is set, so a locked upload can never be missed silently.
+    """
     count = 0
+    skipped: list[str] = []
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         if folder.is_dir():
             for path in sorted(folder.rglob("*")):
-                if path.is_file():
-                    archive.write(path, path.relative_to(folder).as_posix())
-                    count += 1
-    return count
+                if not path.is_file() or path.name in skip_names:
+                    continue
+                name = path.relative_to(folder).as_posix()
+                try:
+                    archive.write(path, name)
+                except PermissionError as exc:
+                    if not tolerate_locked:
+                        raise SystemExit(
+                            f"Cannot read {path}: another program has it open."
+                        ) from exc
+                    skipped.append(name)
+                    continue
+                count += 1
+    return count, skipped
 
 
 def _table_counts(url: URL | str) -> dict[str, int]:
@@ -123,7 +145,17 @@ def backup(args: argparse.Namespace) -> int:
         out_root = ROOT / out_root
     dest = out_root / f"apex-{stamp}"
     dest.mkdir(parents=True)
+    try:
+        return _write_backup(args, settings, url, out_root, dest)
+    except BaseException:
+        # Never leave a half-written folder that looks like a backup.
+        shutil.rmtree(dest, ignore_errors=True)
+        raise
 
+
+def _write_backup(
+    args: argparse.Namespace, settings: Settings, url: URL, out_root: Path, dest: Path
+) -> int:
     files: dict[str, dict[str, object]] = {}
     if url.get_backend_name() == "postgresql":
         kind, db_file = "postgresql", dest / "database.dump"
@@ -146,8 +178,12 @@ def backup(args: argparse.Namespace) -> int:
     vector_dir = Path(settings.vector_store_path)
     upload_dir = upload_dir if upload_dir.is_absolute() else ROOT / upload_dir
     vector_dir = vector_dir if vector_dir.is_absolute() else ROOT / vector_dir
-    n_uploads = _zip_folder(upload_dir, dest / "uploads.zip")
-    n_vectors = _zip_folder(vector_dir, dest / "vector_db.zip")
+    n_uploads, _ = _zip_folder(upload_dir, dest / "uploads.zip")
+    # ".lock" is only the marker the running API keeps open; the vector store recreates it. The
+    # index can always be rebuilt from the uploads, so a locked index file is reported, not fatal.
+    n_vectors, vectors_skipped = _zip_folder(
+        vector_dir, dest / "vector_db.zip", skip_names=(".lock",), tolerate_locked=True
+    )
 
     sizes: dict[str, int] = {}
     for path in (db_file, dest / "uploads.zip", dest / "vector_db.zip"):
@@ -162,6 +198,7 @@ def backup(args: argparse.Namespace) -> int:
         "table_counts": counts,
         "upload_files": n_uploads,
         "vector_index_files": n_vectors,
+        "vector_index_skipped": vectors_skipped,
         "files": files,
     }
     (dest / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -171,6 +208,9 @@ def backup(args: argparse.Namespace) -> int:
         print(f"  {name:<16} {size / 1024:>9.1f} KB")
     print(f"  {len(counts)} tables, {sum(counts.values())} rows")
     print(f"  {n_uploads} uploaded files, {n_vectors} vector index files")
+    if vectors_skipped:
+        print(f"  WARNING: vector index files left out (in use): {', '.join(vectors_skipped)}")
+        print("  The index can be rebuilt from the uploads (re-index); the rest is complete.")
     if args.keep:
         old = sorted(p for p in out_root.glob("apex-*") if p.is_dir())[: -args.keep]
         for folder in old:

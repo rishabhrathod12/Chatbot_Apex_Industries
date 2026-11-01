@@ -72,6 +72,25 @@ published database port temporarily).
 - Tested: a real backup of the live database restored into the scratch database with every table matching, and
   deliberately corrupted files were refused. The vector index is copied as files and may be inconsistent if the API is
   busy; it can be rebuilt from the uploads.
+- **Nightly job (written and tested, not registered).** `scripts\backup_job.ps1 -Destination "F:\ApexBackups;..."` takes a
+  backup, copies it to each destination (folders separated by semicolons), checks every copied file against the
+  checksums in `manifest.json`, and appends a line to `backups\backup.log` (times and results, never passwords). It
+  exits with 1 if anything failed. It deletes nothing unless you pass `-Keep N`. `scripts\register_backup_task.ps1
+  -Destination "..." -Time 02:30` registers it as a daily Task Scheduler job that runs as you while you are signed in
+  (no stored password) and catches up at the next sign-in if the time was missed; add `-DryRun` to see what it would
+  do, or `-Remove` to take it out. Check it with `Get-ScheduledTaskInfo -TaskName ApexBackup` and the log.
+- **Where the copy must go.** On the development machine D:, E: and F: are three partitions of one hard disk, and the
+  PostgreSQL data is on the small SSD (C:). A copy on D: or F: protects against deleting or damaging a file, not
+  against that disk failing. A real second copy needs a USB drive, a network share or cloud storage.
+- **Locked files.** While the API runs, Windows keeps `vector_db\.lock` open. The backup always leaves that marker
+  out (the vector store recreates it) and, for any other locked file in the vector index, records it in the manifest
+  (`vector_index_skipped`) and prints a warning instead of failing: the index can be rebuilt from the uploads. A
+  locked uploaded file does stop the backup, because it cannot be rebuilt. A failed backup removes its own half-written
+  folder.
+- Tested 2026-11-01 with the API running: a normal run, one good plus one unreachable destination (exit 1, the good
+  copy still made), a tampered copy (one flipped byte, and a deleted file, both caught), and a restore of the
+  resulting backup into the scratch database (every table matched). The scheduled task itself has not been registered
+  or run.
 - To recover the live database after a disaster, restore with `--replace-live` into an empty `apex` database, then
   copy the uploads and vector index back. That full recovery has not been rehearsed; the restore into the scratch
   database has.
@@ -85,7 +104,7 @@ published database port temporarily).
   separate changes.
 - **Login rate limiting sees the web container's address**, not the user's, because Streamlit calls the API from
   the server. It still limits per email, but not per client machine.
-- **Backups are not automated, and nothing copies them off this machine.** The manual procedure is tested (below).
+- **Backups are not scheduled yet, and nothing copies them off this machine.** The manual procedure and the nightly job are written and tested (above); register the job once you have chosen a destination.
   A backup on the same disk as the data does not survive a disk failure: copy `backups\` to another drive or machine
   on a schedule (for example a Windows Task Scheduler job running `scripts\backup.py backup`).
   For the Docker setup, the equivalent is `docker compose exec db pg_dump -U apex apex > apex.sql` plus a copy of
